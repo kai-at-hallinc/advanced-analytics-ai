@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "advanced-analytics-ai"
+version = "0.1.0"
+description = "Advanced Analytics AI — AIMA-based topic packages for fast prototyping"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "ipywidgets",
+    "jupyter",
+]
+
+[project.optional-dependencies]
+ml = ["qpsolvers"]
+deep_learning = ["keras", "tensorflow"]
+mcp = ["mcp"]
+dev = ["pytest", "pytest-cov"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
