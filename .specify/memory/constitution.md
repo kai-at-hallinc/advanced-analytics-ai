@@ -1,50 +1,146 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+SYNC IMPACT REPORT
+Version change: template (unversioned) → 1.0.0
+Bump type: MAJOR — initial formal ratification from blank template.
+
+Principles resolved:
+- [PRINCIPLE_1_NAME] → I. Module-First (new)
+- [PRINCIPLE_2_NAME] → II. Notebook-Driven Prototyping (new)
+- [PRINCIPLE_3_NAME] → III. Test Coverage Required (new)
+- [PRINCIPLE_4_NAME] → IV. Reproducibility (new)
+- [PRINCIPLE_5_NAME] → V. Simplicity & Educational Clarity (new)
+
+Sections added:
+- Technology Stack & Constraints (formerly [SECTION_2_NAME])
+- Development Workflow (formerly [SECTION_3_NAME])
+- Governance (populated)
+
+Sections removed: None
+
+Templates requiring updates:
+✅ .specify/memory/constitution.md — updated (this file)
+✅ .specify/templates/plan-template.md — no changes required; Constitution Check gate is generic
+✅ .specify/templates/spec-template.md — no changes required
+✅ .specify/templates/tasks-template.md — no changes required
+✅ .specify/templates/agent-file-template.md — no changes required
+✅ .specify/templates/checklist-template.md — no changes required
+⚠ .specify/templates/commands/ — directory absent; skipped
+
+Deferred TODOs: None. All placeholders resolved.
+-->
+
+# Advanced Analytics AI Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Module-First
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+Every feature MUST start as a standalone topic module under `src/`.
+Modules MUST be self-contained, independently importable, and independently
+testable without requiring other `src/` modules unless an explicit interface
+contract exists. Each module MUST address one clearly-defined AI/ML or
+analytics domain (e.g., `csp`, `ml`, `planning`, `rl`). Organizational-only
+modules with no substantive logic are not permitted.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+**Rationale**: Modular boundaries prevent entanglement, enable incremental
+delivery, and keep the codebase navigable as the domain surface grows.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Notebook-Driven Prototyping
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+All new algorithms or analytical methods MUST be prototyped in a Jupyter
+notebook under `notebooks/` before being extracted to `src/`. Notebooks serve
+as living documentation and experimentation records. Once a pattern is
+validated in a notebook, the implementation MUST be extracted to the
+appropriate `src/` module and the notebook updated to import from `src/`
+rather than re-implementing inline logic.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+**Rationale**: Notebooks enable rapid exploration; the extraction rule keeps
+`src/` as the authoritative, tested implementation.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Test Coverage Required
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+Every public function or class added to `src/` MUST have a corresponding
+test in `tests/`, mirroring the `src/` directory hierarchy. The test runner
+is `pytest`; no alternative runner is permitted. Tests for a module MUST pass
+independently before that module is considered mergeable. Tests MUST be
+written before or alongside implementation — never solely after PR review.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Rationale**: Untested prototype code accumulates silent regressions;
+mandatory coverage enforces confidence at the module boundary.
+
+### IV. Reproducibility
+
+All experiments and optimization runs MUST be reproducible. Random seeds MUST
+be set explicitly where stochastic behaviour is involved. All runtime
+dependencies MUST be declared in `pyproject.toml`; undeclared transitive
+dependencies are not acceptable in `src/` code. Data preprocessing steps
+that affect results MUST be documented in the relevant notebook or a
+dedicated README section.
+
+**Rationale**: Reproducibility is the foundation of valid scientific
+prototyping; it enables colleagues to replicate, audit, and extend results.
+
+### V. Simplicity & Educational Clarity
+
+Implementations MUST be explainable and educationally clear. YAGNI applies:
+no premature abstractions, no speculative generalisations. Complexity beyond
+the minimum needed MUST be justified with a written rationale. Where an AIMA
+textbook algorithm exists, the implementation MUST follow its conventions and
+naming unless a documented reason overrides them. Prefer readable code over
+micro-optimised-but-opaque code.
+
+**Rationale**: The project serves as a learning and prototyping environment;
+clarity is a first-class quality attribute alongside correctness.
+
+## Technology Stack & Constraints
+
+- **Language**: Python 3.10 or higher (required).
+- **Core dependencies**: `numpy`, `scipy`, `ipywidgets`, `jupyter` — always
+  available; MUST NOT be removed from base dependencies.
+- **Optional groups** (declared in `pyproject.toml`):
+  - `ml` — `qpsolvers` for linear/quadratic programming formulations.
+  - `deep_learning` — `keras`, `tensorflow` for neural network experiments.
+  - `mcp` — `mcp` package for Model Context Protocol agentic tool integration.
+  - `dev` — `pytest`, `pytest-cov` for development and CI.
+- No unlisted runtime dependency MAY be introduced without a corresponding
+  `pyproject.toml` update and PR review.
+- All optional dependency groups MUST be installable in isolation without
+  side effects on other groups.
+
+## Development Workflow
+
+1. All new work MUST be developed on a feature branch from `main`.
+2. The standard delivery flow is: notebook prototype → `src/` extraction →
+   `tests/` coverage → PR review → merge to `main`.
+3. `pytest` MUST pass with zero failures before a PR is opened.
+4. Business problem formulations (e.g., LP/IP models) belong under
+   `business_problems/` and MUST reference the relevant `src/` solver module
+   rather than re-implementing solver logic inline.
+5. MCP tool implementations belong under `mcp/` and MUST be independently
+   runnable and testable.
+6. Commit messages MUST be descriptive; each commit SHOULD correspond to one
+   logical unit of change (a module, a notebook, or a test suite).
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution supersedes all other development practices for this
+repository. Any practice not addressed here defaults to Python community
+standards (PEP 8, PEP 20).
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Amendment procedure**: Amendments require a dedicated PR that (1) updates
+this file, (2) increments the version per the versioning policy below,
+(3) lists changed principles or sections in the PR description, and
+(4) receives at least one approval before merge.
+
+**Versioning policy**:
+- MAJOR: backward-incompatible governance changes, principle removals, or
+  redefinitions that invalidate existing practice.
+- MINOR: new principle or section added, or materially expanded guidance.
+- PATCH: clarifications, wording fixes, or non-semantic refinements.
+
+**Compliance review**: All PRs MUST be reviewed against the Core Principles
+before merge. Violations MUST either be resolved or documented in a
+Complexity Tracking table in the relevant implementation plan. Use `README.md`
+for runtime development guidance that supplements this constitution.
+
+**Version**: 1.0.0 | **Ratified**: 2026-04-15 | **Last Amended**: 2026-04-17
