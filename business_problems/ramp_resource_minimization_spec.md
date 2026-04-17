@@ -5,9 +5,9 @@
 | Field | Value |
 |-------|-------|
 | Status | `draft` |
-| Owner | Finavia |
+| Owner | hallinc |
 | Phase | 1 of 2 |
-| Solver target | Python / PuLP |
+| Solver target | Python / ORTools |
 | Primary reference | Sahadevan et al. 2023 |
 | Supporting reference | LP_operations_research.pdf §3.5, §3.12 |
 | Roadmap reference | Sheibani 2018 (Phase 2 — turnaround window) |
@@ -629,7 +629,12 @@ Derive `W` (slot occupancy duration per flight) using CPM/PERT + Monte Carlo sim
 
 ### Stage 1
 
-- [ ] Model reproduces Sahadevan Table 7: `r_j = 221` on scheduled inputs, `r_j = 269` on actual inputs
+- [ ] Model produces a comparison table structured like Sahadevan Table 7; data values will differ from Sahadevan's inputs.
+  - one row per aircraft type
+  - columns for scheduled and actual flight count
+  - manpower-per-flight
+  - total manpower
+  - footer row summing to `r_j`
 - [ ] Constraint 6 correctly reduces `n_ij` by 80% when `d_i = 1`
 - [ ] Constraint 9 correctly sets `y_ij = 0` for arrivals outside ±15 min window
 - [ ] `r_j ≤ R` holds at all slots
@@ -652,7 +657,20 @@ Derive `W` (slot occupancy duration per flight) using CPM/PERT + Monte Carlo sim
 
 ## 9. Verification Steps
 
-1. **Table 7 reproduction** — Feed Sahadevan Table 7 values as input. Assert `r_j(scheduled) == 221` and `r_j(actual) == 269`.
+1. **Table 7-style output** — Run Stage 1 on sample inputs. Assert the output contains a comparison table with the structure shown below;
+  `r_j` values will differ from Sahadevan's because the sample is not the paper's dataset.
+
+   **Example output table (sample data)**
+
+   | Aircraft Type | Sched. Flights | Manpower/Flight | Sched. Total | Actual Flights | Manpower/Flight | Actual Total |
+   | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+   | A320 | 2 | 13 | 26 | 3 | 13 | 39 |
+   | B738 | 2 | 13 | 26 | 2 | 13 | 26 |
+   | B772 | 1 | 26 | 26 | 1 | 26 | 26 |
+   | **Total manpower for hour** | | | **78** | | | **91** |
+   | % additional due to actual variation | | | | | | **17%** |
+
+   *Scheduled `r_j = 78`; actual `r_j = 91` in this example. Replace with real Finavia data for production runs.*
 
 2. **Delay scenario** — Set `d_i = 1` for all aircraft types. Assert `n_ij = 0.2 · s_ij` for every `(i, j)` pair.
 
