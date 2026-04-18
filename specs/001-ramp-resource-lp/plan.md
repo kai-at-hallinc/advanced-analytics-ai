@@ -23,8 +23,9 @@ types as dataclasses and tests in pytest.
 **Target Platform**: Any Python 3.10+ environment (Windows / Linux / macOS)
 **Project Type**: library (Python module)
 **Performance Goals**: Full-day demand curve in <30 seconds (SC-001); Stage 2 LP on 18 slots solves in milliseconds
-**Constraints**: No external serialisation dependencies; deterministic LP solve; integer rounding via `math.ceil` post-solve only; departure window clipped silently at operating day boundary
+**Constraints**: No external serialisation dependencies; deterministic LP solve; integer rounding via `math.ceil` post-solve only; departure window clipped silently at operating day boundary; `compute_demand()` raises `ValueError` for out-of-range hours — caller must pre-filter
 **Scale/Scope**: 18 hourly slots, 3 canonical aircraft types, single-day batch, two movement directions
+**Test Dataset**: `data/finavia_flights_efhk_20260330.csv` — 447 EFHK movements (223 arrivals, 224 departures) on 2026-03-30; dominant type AT75 (narrow-body), A359 (wide-body); 7 cargo movements; pre-dawn/post-midnight flights must be filtered before calling `compute_demand()`
 
 ## Constitution Check
 
@@ -82,6 +83,13 @@ notebooks/planning/
 business_problems/
 ├── ramp_resource_minimization_formulation.md    ← EXISTING: mathematical derivation (keep)
 └── ramp_resource_lp.py                          ← NEW: Finavia-specific instantiation calling src/lp
+                                                    owns: ICAO → LP category mapping, operating-window
+                                                    pre-filtering, and CSV parsing from data/
+
+data/
+└── finavia_flights_efhk_20260330.csv            ← EXISTING: reference dataset (447 EFHK movements,
+                                                    2026-03-30); used in notebook prototype and
+                                                    parametrised integration tests
 
 pyproject.toml                  ← UPDATE: add `lp = ["ortools"]` optional dependency group
 ```

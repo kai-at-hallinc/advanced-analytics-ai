@@ -28,6 +28,57 @@
 - Q: Do departure counts support the same 3-mode input pattern as arrivals (scheduled-only, delay flags, or actual departure counts)? → A: Yes — same 3-mode pattern: actual departure counts take precedence over the heuristic when provided; delay flags apply the 20/80 heuristic when no actuals are supplied; scheduled counts are used unchanged when neither is provided.
 - Q: Should the ±15-minute on-time tolerance window (FR-011) apply to departures as well as arrivals — reclassifying departure demand to the actual departure slot when outside tolerance? → A: Yes — same ±15-minute tolerance applies; departure demand is reclassified to the actual departure slot when the flight departs outside the window.
 - Q: SC-003 asserts a ≥15% gap between actual and scheduled demand — is this a meaningful system criterion or an empirical observation from Sahadevan? → A: It is a dataset observation, not a system guarantee. The system does not predict or enforce any gap magnitude; it faithfully reflects whatever difference exists in the input counts. SC-003 should be reframed as a verifiable system property rather than a threshold tied to a specific study.
+- Q: What is the development and test dataset for this feature? → A: `data/finavia_flights_efhk_20260330.csv` — one day of Finavia EFHK (Helsinki-Vantaa) scheduled movements on 2026-03-30; 447 flights (223 arrivals, 224 departures) across 14 columns including flight type, aircraft ICAO code, and ISO-8601 scheduled time in Helsinki local time (+03:00).
+- Q: How should `compute_demand()` handle `FlightSlotInput` entries whose `hour` falls outside the configured operating window (e.g., a 04:40 movement in the EFHK dataset when `operating_day_start = 5`)? → A: Raise `ValueError` — the LP module is strict; it is the caller's responsibility to filter movements to the operating window before calling `compute_demand()`. The integration layer (e.g., `business_problems/ramp_resource_lp.py`) owns the pre-filtering step.
+
+## Development & Test Data
+
+### Reference Dataset
+
+**File**: `data/finavia_flights_efhk_20260330.csv`
+**Airport**: EFHK — Helsinki-Vantaa International Airport
+**Date**: 2026-03-30 (one operating day)
+
+**Contents**: 447 flight movement records — 223 arrivals (`op_type = A`) and 224 departures (`op_type = D`). Scheduled times span 04:40 to next-day 01:40 Helsinki time (+03:00). Movements outside the 05:00–23:00 operating window (pre-dawn and post-midnight flights) must be filtered out by the loader before calling `compute_demand()` — the LP module raises `ValueError` for out-of-range hours and does not self-filter.
+
+**Columns used by the LP**:
+
+| Column | Description |
+| ------ | ----------- |
+| `op_type` | `A` = arrival, `D` = departure |
+| `scheduled_time` | ISO-8601 timestamp with Helsinki timezone offset; slot = floor(hour) |
+| `aircraft_type_icao` | ICAO aircraft type code; must be mapped to LP category (see below) |
+| `flight_type_iata` | `J` = scheduled passenger, `F` = cargo, `C` = charter, others = non-revenue |
+
+**Columns not used by the LP** (available for future extensions): `flight_id`, `flight_number`, `airline_iata`, `origin_icao`, `destination_icao`, `predicted_passengers`, `gate`, `baggage_belt`.
+
+**Aircraft type distribution**:
+
+| ICAO code | Aircraft | LP category | Count |
+| --------- | -------- | ----------- | ----- |
+| AT75 | ATR 72-500 (regional turboprop) | narrow_body | 96 |
+| A321 | Airbus A321 | narrow_body | 64 |
+| E190 | Embraer E190 | narrow_body | 62 |
+| A320 | Airbus A320 | narrow_body | 51 |
+| A319 | Airbus A319 | narrow_body | 35 |
+| B738 | Boeing 737-800 | narrow_body | 30 |
+| A359 | Airbus A350-900 | wide_body | 24 |
+| B38M | Boeing 737 MAX 8 | narrow_body | 20 |
+| A20N | Airbus A320neo | narrow_body | 11 |
+| BCS3 | Airbus A220-300 | narrow_body | 10 |
+| others | Various | see mapping table | 44 |
+
+**ICAO → LP category mapping** (must be applied before passing counts to `compute_demand()`; not performed by the LP module itself):
+
+- `narrow_body`: AT75, A318, A319, A320, A321, A20N, A21N, B737, B738, B739, B38M, BCS1, BCS3, E170, E175, E190, E195, DH8D, and other single-aisle aircraft
+- `wide_body`: A332, A333, A339, A350, A359, A35K, B763, B772, B773, B77W, B788, B789, and other twin-aisle aircraft
+- `cargo`: flights where `flight_type_iata = F` (7 movements in this dataset), regardless of ICAO code
+
+**Primary airline**: AY (Finnair) — 335 of 447 movements (75%). Remaining carriers: D8 (Norwegian), SK (SAS), FR (Ryanair), BT (airBaltic), others.
+
+**Purpose**: This dataset is the primary reference for development prototyping in `notebooks/planning/ramp_resource_lp.ipynb` and for parametrised integration tests in `tests/lp/`. It represents a realistic mid-season weekday at a hub airport with a mix of long-haul wide-body arrivals and short-haul narrow-body feeder traffic — a scenario that exercises both arrival window and departure window demand independently.
+
+---
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -242,7 +293,7 @@ A Resource Planner at Helsinki-Vantaa needs the demand curve to reflect departur
 - Scheduled and actual arrival counts are provided as inputs; the system does not fetch or predict them. Predicting actual arrival times is a separate forecasting task outside this scope.
 - The following are explicitly out of scope for this version: stand and gate allocation optimisation; real-time rescheduling; predicting actual flight arrival times; linking specific arriving and departing aircraft as turnaround pairs; multi-day ground time modelling.
 - The following are planned extensions to be addressed in later phases: (1) multiple worker roles per aircraft turn with role-specific staffing standards; (2) morning and evening joint shift scheduling with configurable boundary hours; (3) rolling 7-day horizon with daily forecast refresh; (4) part-time workers with half-length shifts; (5) variable staffing standard per aircraft type within a contractual min/max range; (6) probabilistic arrival window derived from ground handling task networks using Monte Carlo simulation; (7) linking specific arrival and departure movements as turnaround pairs; (8) multi-day ground time modelling.
-- The default operating day runs from 05:00 to 23:00, producing 18 hourly decision-variable slots. Both stages use this window; the boundary is configurable per run.
+- The default operating day runs from 05:00 to 23:00, producing 18 hourly decision-variable slots. Both stages use this window; the boundary is configurable per run. Movements outside the operating window (e.g., pre-dawn arrivals before 05:00) must be filtered by the caller before passing data to `compute_demand()`; the LP module raises `ValueError` for any `FlightSlotInput` with an out-of-range hour and does not silently discard it.
 - The system is delivered as a Python module exposing typed function signatures (e.g., `compute_demand(...)` and `schedule_shifts(...)`). It may be called from scripts, notebooks, or future API layers without coupling to any delivery format.
 - The LP implementation uses Google OR-Tools (GLOP linear solver). Integer rounding of fractional shift counts uses ceiling arithmetic applied post-solve, not a MIP branch-and-bound step.
 - Public API inputs and outputs use Python dataclasses (or TypedDict where a mutable mapping is more natural). No external serialisation library is required. All public types carry full type hints.

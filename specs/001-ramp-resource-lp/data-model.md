@@ -251,13 +251,13 @@ DEFAULT_SHIFT_LENGTH: int = 8
 ## Entity Relationship Summary
 
 ```text
-FlightSlotInput ──(many)──→ compute_demand() ──→ DemandResult
-DemandConfig    ──(config)──↗                        │
-                                                      ↓
-                                              schedule_shifts() ──→ ShiftSchedule
-                                              ShiftConfig ──(config)──↗
+FlightSlotInput ──(many)──> compute_demand() ──> DemandResult
+DemandConfig    ──(config)──|                        |
+                                                     |
+                                              schedule_shifts() ──> ShiftSchedule
+                                              ShiftConfig ──(config)──|
 
-DemandResult + ShiftSchedule ──→ identify_bottlenecks() ──→ BottleneckResult
+DemandResult + ShiftSchedule ──> identify_bottlenecks() ──> BottleneckResult
 
-FlightSlotInput (scheduled) + FlightSlotInput (actuals) ──→ comparison_report() ──→ ComparisonReport
+FlightSlotInput (scheduled) + FlightSlotInput (actuals) ──> comparison_report() ──> ComparisonReport
 ```

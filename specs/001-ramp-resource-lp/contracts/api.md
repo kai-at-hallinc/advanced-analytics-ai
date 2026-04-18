@@ -33,16 +33,25 @@ def compute_demand(
 
 For each operating hour `j` in `[operating_day_start, operating_day_end)`:
 
-```text
-r_j = arr_j + dep_j
+$$
+\begin{align}
+r_j &= \text{arr}_j + \text{dep}_j \\
+\\
+\text{arr}_j &= \sum_{i} \sum_{k=0}^{W_{\text{arr}_i} - 1} \text{arrivals}(i, j-k) \cdot c_{\text{arr}_i} \\
+&\quad \text{(forward-looking: arrival at slot } j-k \text{ contributes to slots } j-k \ldots j-k+W_{\text{arr}_i}-1\text{)} \\
+\\
+\text{dep}_j &= \sum_{i} \sum_{k=0}^{W_{\text{dep}_i} - 1} \text{departures}(i, j+k) \cdot c_{\text{dep}_i} \\
+&\quad \text{(backward-looking: departure at slot } j+k \text{ contributes to slots } j \ldots j+k\text{)} \\
+&\quad \text{(equivalently: departure at slot } m \text{ contributes to slots } \max(\text{day\_start}, m-W_{\text{dep}_i}+1) \ldots m\text{)}
+\end{align}
+$$
 
-arr_j = Σ_i  Σ_{k=0}^{W_arr_i - 1}  arrivals(i, j−k) · c_arr_i
-          (forward-looking: arrival at slot j−k contributes to slots j−k … j−k+W_arr_i−1)
+### Variable definitions
 
-dep_j = Σ_i  Σ_{k=0}^{W_dep_i - 1}  departures(i, j+k) · c_dep_i
-          (backward-looking: departure at slot j+k contributes to slots j … j+k)
-          (equivalently: departure at slot m contributes to slots max(day_start, m−W_dep_i+1) … m)
-```
+- **$k$**: window offset index. For arrivals, $k \in [0, W_{\text{arr}_i} - 1]$ spreads an arrival's resource impact forward across multiple consecutive slots. For departures, $k \in [0, W_{\text{dep}_i} - 1]$ spreads a departure's prep work backward.
+- **$W_{\text{arr}_i}$**: arrival window size (slots) for aircraft type $i$ — how long resources are needed after landing.
+- **$W_{\text{dep}_i}$**: departure window size (slots) for aircraft type $i$ — how long resources are needed before departure.
+- **$c_{\text{arr}_i}$, $c_{\text{dep}_i}$**: resource coefficients per movement (e.g., personnel count per aircraft).
 
 Arrival demand and departure demand are computed independently; neither is derived from the other (FR-013).
 
@@ -94,11 +103,13 @@ def schedule_shifts(
 
 Solves the textbook shift-start LP:
 
-```text
-min  Σ_t x_t
-s.t. Σ_{i=max(0, t−L+1)}^{t} x_i  ≥  d_t   for all t
-     x_t ≥ 0
-```
+$$
+\begin{align}
+\text{min} \quad &\sum_{t} x_t \\
+\text{s.t.} \quad &\sum_{i=\max(0, t-L+1)}^{t} x_i \geq d_t \quad \forall t \\
+&x_t \geq 0
+\end{align}
+$$
 
 Using OR-Tools GLOP (`pywraplp.Solver.CreateSolver('GLOP')`).
 

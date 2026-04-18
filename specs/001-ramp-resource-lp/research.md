@@ -159,6 +159,31 @@ class ComparisonReport:
 
 ---
 
+## Decision 6: ICAO → LP Category Mapping and Pre-filtering Ownership
+
+**Decision**: ICAO code mapping and operating-window pre-filtering are the caller's responsibility, implemented in `business_problems/ramp_resource_lp.py`. The `src/lp/` module is strict: it raises `ValueError` for any `FlightSlotInput` with an out-of-range hour.
+
+**Rationale**: Separation of concerns — the LP module solves the optimisation problem; the business layer handles airport-specific data preparation. The EFHK dataset has pre-dawn flights (04:40) and post-midnight flights (01:40) that fall outside the 05:00–23:00 operating day. The LP must not silently discard them (would mask data quality issues); the loader must explicitly filter.
+
+**ICAO → LP category mapping** (for the EFHK reference dataset):
+
+| LP category | ICAO codes (present in dataset) | Rationale |
+| ----------- | ------------------------------- | --------- |
+| narrow_body | AT75, A319, A320, A321, A20N, B738, B38M, BCS3, E190 | Single-aisle aircraft ≤180 seats |
+| wide_body | A332, A333, A359 | Twin-aisle aircraft >180 seats |
+| cargo | Any type where `flight_type_iata = F` | Cargo designation overrides airframe class |
+
+**Pre-filtering rule** (implemented in `business_problems/ramp_resource_lp.py`):
+
+```python
+operating_slots = {r['scheduled_time'] slot ∈ [day_start, day_end)}
+filtered = [s for s in slots if s.hour in operating_hours]
+```
+
+**Test dataset**: `data/finavia_flights_efhk_20260330.csv` — 447 rows, 223 arrivals + 224 departures, EFHK 2026-03-30. Dominant aircraft type: AT75 (96 movements). 7 cargo movements (flight_type_iata = F). Primary airline: AY (Finnair, 335 movements / 75%).
+
+---
+
 ## Resolved Items
 
 | Item | Resolution |
@@ -178,3 +203,6 @@ class ComparisonReport:
 | Aircraft categories | narrow-body, wide-body, cargo only |
 | Integer rounding | `math.ceil` post-solve, not MIP |
 | Bottleneck identification | Dual values from GLOP coverage constraints |
+| Out-of-range hour handling | `ValueError` raised by LP; caller pre-filters |
+| ICAO mapping ownership | `business_problems/ramp_resource_lp.py` (not `src/lp/`) |
+| Test dataset | `data/finavia_flights_efhk_20260330.csv` — 447 EFHK movements, 2026-03-30 |
