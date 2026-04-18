@@ -304,11 +304,39 @@ subject to:
   x_t ≥ 0,  integer    for all t
 ```
 
+### 5.8 Toy Example — Shift-Start Headcount Verification
+
+**Toy setup:** H = 6 hours, L = 3h. Each task takes 1 hour; a worker finishing a task is free for the next task within the same shift.
+
+```
+Demand:  Hour:  1   2   3   4   5   6
+         d_t:   2   3   4   3   2   1
+```
+
+**LP variables and objective:**
+
+```
+# x[t] = workers starting at hour t — minimise total unique hires:
+min  x1 + x2 + x3 + x4 + x5 + x6
+
+# Coverage: workers on duty at t = all who started within the last L=3 hours
+hour 1:  x1                  ≥ 2
+hour 2:  x1 + x2             ≥ 3
+hour 3:  x1 + x2 + x3        ≥ 4
+hour 4:       x2 + x3 + x4   ≥ 3
+hour 5:            x3 + x4 + x5  ≥ 2
+hour 6:                 x4 + x5 + x6  ≥ 1
+```
+
+**Optimal solution:** x = [2, 1, 1, 1, 0, 0] → Σ x_t = **5 unique workers**.
+
 ---
 
 ## 6. Extensions
 
-### 6.1 Multiple Worker Roles
+### 6.1 Multiple Worker Roles and Shift Types
+
+#### 6.1.1 Multiple Worker Roles
 
 Different tasks within a turnaround (fuelling, baggage loading, catering, cleaning) require different skills. Extend the model by adding a role index r:
 
@@ -316,6 +344,62 @@ Different tasks within a turnaround (fuelling, baggage loading, catering, cleani
 - Separate coverage constraints per role: Σ x_{i,r} ≥ d_{t,r}
 - Separate c_i,r values per aircraft type and role
 - Objective: min Σ_{t,r} x_{t,r} (or cost-weighted if roles have different wages)
+
+#### 6.1.2 Multiple Shift Types (Morning / Evening)
+
+When the operation runs distinct shift windows (e.g., morning 05:00–13:00 and evening 13:00–21:00) with potentially different shift lengths L_M and L_E, introduce a shift-type index s ∈ {M, E}:
+
+**Decision variables:**
+
+```
+x_t^M  =  morning workers starting at hour t,   t ∈ {1 .. t_cut}
+x_t^E  =  evening workers starting at hour t,   t ∈ {t_start_E .. H}
+```
+
+**Objective — each worker still counted exactly once:**
+
+```
+min  Σ_t x_t^M  +  Σ_t x_t^E
+```
+
+**Coverage constraint at each hour t:**
+
+```
+Σ_{i ∈ M-window(t)} x_i^M  +  Σ_{i ∈ E-window(t)} x_i^E  ≥  d_t
+```
+
+where M-window(t) = {max(1, t−L_M+1) .. t} intersected with the morning start domain, and E-window(t) is the equivalent for evening starts.
+
+**Why not two separate LP runs?**
+
+Running separate LPs for morning and evening is only correct if the two windows are strictly non-overlapping *and* no morning worker's shift extends past the boundary hour. In practice, morning workers starting near the boundary are still on duty during the first evening hours. A separate evening LP does not see them and over-hires to compensate:
+
+```
+Hour:     1    2    3    4    5    6    7    8  │  9   10   11   ...
+                                                │
+  x_7^M (starts hr 7, L=8):  [=========8h=========]  ← still on at hrs 9–14
+  x_8^M (starts hr 8, L=8):       [=========8h=========]  ← still on at hrs 9–15
+                                                │
+  Separate evening LP sees 0 workers on duty here  ← over-hires
+```
+
+The single joint LP credits morning tail-enders toward early-evening demand, hiring fewer evening starters.
+
+**Toy example** (L_M = L_E = 3h, hours 1–6, boundary at hour 4, demand d = [2, 3, 4, 3, 2, 1]):
+
+```
+Coverage constraint at boundary hour 4:
+  x_2^M + x_3^M          (morning tail-enders still on duty)
+  + x_4^E                (first evening starters)          ≥  3
+
+Joint LP solution:
+  x_1^M=2, x_2^M=1, x_3^M=1, x_4^E=1  →  total = 5 workers
+
+Separate LPs see d_4 = 3 with no morning credit:
+  x_4^E must cover all 3 alone           →  total = 7 workers
+
+Saving: 2 hires avoided by crediting morning overlap at the boundary.
+```
 
 ### 6.2 Multiperiod / Rolling Horizon
 
