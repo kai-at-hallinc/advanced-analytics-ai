@@ -10,7 +10,7 @@ All types are defined in `src/lp/types.py`. See [data-model.md](../data-model.md
 ## compute_demand
 
 **Location**: `src/lp/demand.py`
-**Spec coverage**: FR-001, FR-002, FR-003, FR-004, FR-007, FR-010, FR-011
+**Spec coverage**: FR-001, FR-002, FR-003, FR-004, FR-007, FR-010, FR-011, FR-012, FR-013, FR-014, FR-015
 
 ```python
 def compute_demand(
@@ -21,42 +21,55 @@ def compute_demand(
 ) -> DemandResult:
 ```
 
-### Behaviour
+### Input mode precedence (arrivals and departures independently, FR-003 / FR-015)
 
 | Inputs supplied | Mode applied |
 |-----------------|-------------|
-| `actuals` provided | FR-003: use actual counts directly as `a_ij`; no 20/80 split |
-| `delay_flags` only (no `actuals`) | FR-002: apply `n_ij = s_ij · (1 − 0.8·d_i)` per delayed type |
-| Neither `actuals` nor `delay_flags` | Scheduled counts used unchanged |
+| `actuals` provided | Use `arrival_counts` / `departure_counts` from actuals directly; no 20/80 split |
+| `delay_flags` only (no `actuals`) | Apply `n_ij = s_ij · (1 − 0.8·d_i)` per delayed aircraft type (arrivals); same heuristic for departures |
+| Neither `actuals` nor `delay_flags` | Scheduled counts used unchanged for both arrivals and departures |
 
-### Demand computation per slot (FR-001)
+### Demand computation per slot (FR-001, FR-013)
 
 For each operating hour `j` in `[operating_day_start, operating_day_end)`:
 
-```
-r_j = Σ_i  Σ_{k=0}^{W_i - 1}  arrivals_at(i, j−k) · c_i
+```text
+r_j = arr_j + dep_j
+
+arr_j = Σ_i  Σ_{k=0}^{W_arr_i - 1}  arrivals(i, j−k) · c_arr_i
+          (forward-looking: arrival at slot j−k contributes to slots j−k … j−k+W_arr_i−1)
+
+dep_j = Σ_i  Σ_{k=0}^{W_dep_i - 1}  departures(i, j+k) · c_dep_i
+          (backward-looking: departure at slot j+k contributes to slots j … j+k)
+          (equivalently: departure at slot m contributes to slots max(day_start, m−W_dep_i+1) … m)
 ```
 
-where `arrivals_at(i, j−k)` is the (delay-adjusted or actual) count of type `i` that arrived at slot `j−k` and are still on stand at slot `j` (multi-slot turnaround, FR-001).
+Arrival demand and departure demand are computed independently; neither is derived from the other (FR-013).
 
 ### On-time classification (FR-011)
 
-When `actuals` are provided at a finer-than-slot granularity (minute-level `t_ij`):
-- `|t_ij − scheduled_j| ≤ tolerance_minutes` → on time, resources at `scheduled_j`
-- Otherwise → resources at `actual_arrival_slot(t_ij)`
+When `actuals` are provided at finer-than-slot granularity (minute-level `t_ij`):
 
-When only `delay_flags` are used, the 80% shifted portion is attributed to the next operating slot.
+- `|t_ij − scheduled_j| ≤ tolerance_minutes` → on time; resources attributed to `scheduled_j`
+- Otherwise → resources attributed to `actual_slot(t_ij)`
+
+Applies to both arrival and departure movements (FR-011).
 
 ### Early arrivals (FR-010)
 
-An early arrival (actual slot < scheduled slot and outside tolerance) is treated as a full-demand arrival at its actual slot. The resource count at the actual slot is not reduced below the standard `c_i`.
+An early arrival (actual slot < scheduled slot and outside tolerance) is treated as a full-demand arrival at its actual slot. The resource count is not reduced below the standard `c_arr_i`.
+
+### Departure window boundary clipping
+
+When a departure's backward preparation window extends before `operating_day_start`, the window is silently clipped to `operating_day_start`. No error is raised.
 
 ### Workforce pool enforcement (FR-004)
 
-After computing all `r_j`, the function checks `r_j ≤ pool_size` for every slot. If any slot violates this:
+After computing all `r_j`, the function checks `r_j ≤ pool_size` for every slot. If any slot violates:
+
 - `feasible = False`
 - `infeasible_slots` = list of violating clock hours
-- The function still returns the full `demand_curve` (so the caller can inspect magnitudes).
+- The full `demand_curve` is still returned (caller can inspect magnitudes).
 
 ### Raises
 
@@ -80,7 +93,8 @@ def schedule_shifts(
 ### Behaviour
 
 Solves the textbook shift-start LP:
-```
+
+```text
 min  Σ_t x_t
 s.t. Σ_{i=max(0, t−L+1)}^{t} x_i  ≥  d_t   for all t
      x_t ≥ 0
@@ -136,9 +150,16 @@ def comparison_report(
 
 ### Behaviour
 
-Calls `compute_demand(scheduled)` and `compute_demand(actuals=actuals)` separately, then computes per-slot and aggregate gap figures. The aggregate `gap_pct_total` is expected to be ≥ 15% on realistic Finavia data (SC-003).
+Calls `compute_demand(scheduled)` and `compute_demand(actuals=actuals)` separately, decomposing results into arrival and departure demand components. Computes per-slot and aggregate gap figures for each direction independently (FR-008).
 
-Produces the Table 7-style report described in FR-008: scheduled manpower vs actual manpower per slot.
+Produces a Table 7-style report with:
+
+- Per-slot arrival gap: `actual_arrival_demand[i] - scheduled_arrival_demand[i]`
+- Per-slot departure gap: `actual_departure_demand[i] - scheduled_departure_demand[i]`
+- Aggregate `arrival_gap_pct_total` and `departure_gap_pct_total` as percentages of scheduled totals
+- Combined `total_scheduled_demand` and `total_actual_demand` per slot
+
+The report faithfully reflects whatever difference exists in the inputs (SC-003). No empirical threshold is asserted.
 
 ---
 
@@ -157,7 +178,9 @@ from .types import (
     DEFAULT_DEMAND_CONFIG,
     DEFAULT_SHIFT_CONFIG,
     DEFAULT_STAFFING_STANDARDS,
-    DEFAULT_TURNAROUND_SLOTS,
+    DEFAULT_ARRIVAL_WINDOW_SLOTS,
+    DEFAULT_DEPARTURE_STAFFING_STANDARDS,
+    DEFAULT_DEPARTURE_WINDOW_SLOTS,
     DEFAULT_OPERATING_HOURS,
 )
 from .demand import compute_demand
