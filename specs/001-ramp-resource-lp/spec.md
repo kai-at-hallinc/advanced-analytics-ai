@@ -6,6 +6,19 @@
 **Status**: Draft
 **Input**: User description: "A two-stage LP that converts a flight schedule and actual arrival data into the minimum number of ground-handling worker shifts needed to cover every operational hour at a Finavia airport. Stage 1 computes per-slot worker demand adjusted for aircraft type and delays; Stage 2 schedules the fewest shift-starts that satisfy that demand across the full operating day"
 
+## Clarifications
+
+### Session 2026-04-18
+
+- Q: Default staffing standards (workers/flight) for narrow-body, wide-body, cargo? → A: 3 / 5 / 6
+- Q: Which Python LP solver library? → A: Google OR-Tools (GLOP solver)
+- Q: Input/output interface type? → A: Python module with typed function signatures
+- Q: Does one aircraft arrival generate demand across multiple consecutive slots? → A: Yes — demand spans the full turnaround window per aircraft type (narrow-body 1 h, wide-body 2 h, cargo 3 h)
+- Q: Default operating day start and end hours? → A: 05:00–23:00 (18 hourly slots)
+- Q: Python API types for compute_demand() and schedule_shifts() inputs/outputs? → A: dataclasses / TypedDict — typed, zero extra dependencies
+- Q: How do FR-002 (delay-flag model) and FR-003 (actual-arrivals mode) combine in compute_demand()? → A: Single function — compute_demand(scheduled, actuals=None, delay_flags=None); actuals used directly when provided, 20/80 heuristic applied when only delay flags given
+- Q: Is 'superjumbo' in Key Entities a real supported category or illustrative only? → A: Illustrative only — canonical categories are narrow-body, wide-body, and cargo
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Hourly Demand from Flight Schedule (Priority: P1)
@@ -94,9 +107,9 @@ A Resource Planner needs the staffing level per flight to automatically reflect 
 
 **Acceptance Scenarios**:
 
-1. **Given** a narrow-body flight and a wide-body flight both present in the same hour, **When** demand is calculated, **Then** the narrow-body contributes {to-be-set} workers per flight and the wide-body contributes {to-be-set} workers per flight, summed independently.
+1. **Given** a narrow-body flight and a wide-body flight both present in the same hour, **When** demand is calculated, **Then** the narrow-body contributes 3 workers per flight and the wide-body contributes 5 workers per flight, summed independently.
 2. **Given** a staffing standard is updated for one aircraft type only, **When** demand is calculated, **Then** only the hours containing that aircraft type change; all other hours remain unchanged.
-3. **Given** no custom staffing standard is supplied by the operator, **When** the system initialises, **Then** it defaults to {to-be-set} workers per flight for narrow-body types, {to-be-set} for wide-body types, and {to-be-set} for cargo types.
+3. **Given** no custom staffing standard is supplied by the operator, **When** the system initialises, **Then** it defaults to 3 workers per flight for narrow-body types, 5 for wide-body types, and 6 for cargo types.
 
 ---
 
@@ -146,13 +159,13 @@ An Unit Manager wants to know which specific hours of the day are forcing the to
 
 ### Functional Requirements
 
-- **FR-001**: System MUST compute the minimum workers required at each operating hour from the flight schedule and per-aircraft-type staffing standards.
-- **FR-002**: System MUST adjust per-slot aircraft counts when a type is delayed, attributing 20% of scheduled count to the original slot and 80% to the actual arrival slot.
-- **FR-003**: System MUST accept actual-arrival counts as an alternative to scheduled counts, producing a demand curve that reflects real movements.
+- **FR-001**: System MUST compute the minimum workers required at each operating hour from the flight schedule, per-aircraft-type staffing standards, and per-aircraft-type turnaround window durations. A single aircraft arrival occupies worker demand across all slots within its turnaround window.
+- **FR-002**: System MUST adjust per-slot aircraft counts when a type is delayed, attributing 20% of scheduled count to the original slot and 80% to the actual arrival slot. This heuristic applies when only delay flags are available (no actual arrival counts).
+- **FR-003**: System MUST accept actual-arrival counts as an alternative to the 20/80 delay heuristic; when actuals are provided they are used directly. Both FR-002 and FR-003 are served by a single `compute_demand(scheduled, actuals=None, delay_flags=None)` function: when `actuals` is supplied FR-003 applies; when only `delay_flags` are supplied FR-002 applies; when neither is supplied scheduled counts are used unchanged.
 - **FR-004**: System MUST enforce a workforce pool ceiling: if demand at any slot would exceed total available workers, the system MUST report infeasibility and identify the affected slots.
 - **FR-005**: System MUST produce a shift-start schedule that covers hourly demand using the fewest total workers, given a configurable uniform shift length.
 - **FR-006**: System MUST count each worker exactly once in the daily total, regardless of shift length.
-- **FR-007**: System MUST accept staffing standards (workers per flight) as a configurable input per aircraft type. These defaults apply when no custom value is provided.
+- **FR-007**: System MUST accept staffing standards (workers per flight) as a configurable input per aircraft type. Default values when no custom standard is provided: narrow-body 3 workers/flight, wide-body 5 workers/flight, cargo 6 workers/flight.
 - **FR-008**: System MUST produce a comparison output showing scheduled-arrival demand versus actual-arrival demand per aircraft type for the same time slot (Table 7-style report).
 - **FR-009**: System MUST expose the bottleneck hours driving total workforce size, labelled by clock time and showing the demand figure that is binding.
 - **FR-010**: System MUST treat early-arriving aircraft as generating equal or greater resource demand per flight compared to on-time arrivals. An early arrival must not reduce the resource allocation for that arrival slot.
@@ -160,8 +173,8 @@ An Unit Manager wants to know which specific hours of the day are forcing the to
 
 ### Key Entities
 
-- **Flight Slot**: A one-hour window defined by its position in the operating day; characterised by the count of each aircraft type scheduled and actually arriving within it.
-- **Aircraft Type**: A category of aircraft (e.g., narrow-body, wide-body, superjumbo) defined by its staffing standard — the number of workers required per flight of that type.
+- **Flight Slot**: A one-hour window defined by its position in the operating day (default range: 05:00–23:00); characterised by the count of each aircraft type scheduled and actually arriving within it, plus aggregate demand contributed by aircraft still on stand from prior-slot arrivals whose turnaround window spans this slot.
+- **Aircraft Type**: A category of aircraft — one of narrow-body, wide-body, or cargo — defined by its staffing standard (the number of workers required per flight of that type) and its turnaround window duration.
 - **Demand Curve**: The ordered series of minimum worker counts required at each slot across the full operating day; the output of Stage 1 and the input to Stage 2.
 - **Worker Shift**: A block of consecutive hours worked by one person, defined by a start hour and a fixed length; the unit of decision in Stage 2.
 - **Daily Headcount**: The total number of distinct worker-shifts rostered for the day; the primary output of Stage 2 and the figure submitted to HR and Finance.
@@ -193,3 +206,8 @@ An Unit Manager wants to know which specific hours of the day are forcing the to
 - Scheduled and actual arrival counts are provided as inputs; the system does not fetch or predict them. Predicting actual arrival times is a separate forecasting task outside this scope.
 - The following are explicitly out of scope for this version: stand and gate allocation optimisation; real-time rescheduling; predicting actual flight arrival times.
 - The following are planned extensions to be addressed in later phases: (1) multiple worker roles per aircraft turn with role-specific staffing standards; (2) morning and evening joint shift scheduling with configurable boundary hours; (3) rolling 7-day horizon with daily forecast refresh; (4) part-time workers with half-length shifts; (5) variable staffing standard per aircraft type within a contractual min/max range; (6) probabilistic turnaround window derived from ground handling task networks using Monte Carlo simulation.
+- The default operating day runs from 05:00 to 23:00, producing 18 hourly decision-variable slots. Both stages use this window; the boundary is configurable per run.
+- The system is delivered as a Python module exposing typed function signatures (e.g., `compute_demand(...)` and `schedule_shifts(...)`). It may be called from scripts, notebooks, or future API layers without coupling to any delivery format.
+- The LP implementation uses Google OR-Tools (GLOP linear solver). Integer rounding of fractional shift counts uses ceiling arithmetic applied post-solve, not a MIP branch-and-bound step.
+- Public API inputs and outputs use Python dataclasses (or TypedDict where a mutable mapping is more natural). No external serialisation library is required. All public types carry full type hints.
+- Turnaround window defaults per aircraft category: narrow-body 1 hour, wide-body 2 hours, cargo 3 hours. These values are configurable per run. A flight arriving outside the tolerance window occupies demand starting from its actual arrival slot for the full turnaround duration of its category.
