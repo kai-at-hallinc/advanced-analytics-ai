@@ -1,6 +1,6 @@
 # Quickstart: Ramp Resource LP
 
-**Feature**: `001-ramp-resource-lp` | **Date**: 2026-04-18
+**Feature**: `001-ramp-resource-lp` | **Date**: 2026-04-19
 
 ---
 
@@ -27,11 +27,11 @@ from src.lp import (
 
 # --- Define a simple one-day schedule (05:00–10:00 excerpt) ---
 scheduled = [
-    FlightSlotInput(hour=5,  counts={AircraftType.NARROW_BODY: 2}),
-    FlightSlotInput(hour=6,  counts={AircraftType.NARROW_BODY: 4, AircraftType.WIDE_BODY: 1}),
-    FlightSlotInput(hour=7,  counts={AircraftType.NARROW_BODY: 3, AircraftType.WIDE_BODY: 2}),
-    FlightSlotInput(hour=8,  counts={AircraftType.NARROW_BODY: 2, AircraftType.CARGO: 1}),
-    FlightSlotInput(hour=9,  counts={AircraftType.NARROW_BODY: 1}),
+    FlightSlotInput(hour=5,  arrival_counts={AircraftType.NARROW_BODY: 2}),
+    FlightSlotInput(hour=6,  arrival_counts={AircraftType.NARROW_BODY: 4, AircraftType.WIDE_BODY: 1}),
+    FlightSlotInput(hour=7,  arrival_counts={AircraftType.NARROW_BODY: 3, AircraftType.WIDE_BODY: 2}),
+    FlightSlotInput(hour=8,  arrival_counts={AircraftType.NARROW_BODY: 2, AircraftType.CARGO: 1}),
+    FlightSlotInput(hour=9,  arrival_counts={AircraftType.NARROW_BODY: 1}),
     # ... add remaining hours up to 22 for a full-day run
 ]
 
@@ -55,12 +55,18 @@ print("Bottleneck hours:", bottlenecks.bottleneck_hours)
 ## With Delay Flags
 
 ```python
-# Mark wide-body aircraft as delayed — applies 20% / 80% split
+# Mark wide-body arrivals as delayed — applies 20% / 80% split to arrival counts
 demand_delayed = compute_demand(
     scheduled,
-    delay_flags={AircraftType.WIDE_BODY: True},
+    arrival_delay_flags={AircraftType.WIDE_BODY: True},
 )
 print("Delay-adjusted demand:", demand_delayed.demand_curve)
+
+# Mark wide-body departures as delayed independently
+demand_dep_delayed = compute_demand(
+    scheduled,
+    departure_delay_flags={AircraftType.WIDE_BODY: True},
+)
 ```
 
 ---
@@ -68,20 +74,21 @@ print("Delay-adjusted demand:", demand_delayed.demand_curve)
 ## With Actual Arrival Counts
 
 ```python
-# Provide actual arrivals — used directly, overrides delay heuristic
+# Provide actual counts — used directly, overrides delay heuristic
 actuals = [
-    FlightSlotInput(hour=5,  counts={AircraftType.NARROW_BODY: 2}),
-    FlightSlotInput(hour=6,  counts={AircraftType.NARROW_BODY: 3, AircraftType.WIDE_BODY: 2}),  # one wide-body shifted to 06:00
+    FlightSlotInput(hour=5,  arrival_counts={AircraftType.NARROW_BODY: 2}),
+    FlightSlotInput(hour=6,  arrival_counts={AircraftType.NARROW_BODY: 3, AircraftType.WIDE_BODY: 2}),  # one wide-body shifted to 06:00
     # ...
 ]
 
 demand_actual = compute_demand(scheduled, actuals=actuals)
 
-# Compare scheduled vs actual demand (Table 7-style report)
+# Compare scheduled vs actual demand (direction-level report)
 report = comparison_report(scheduled, actuals)
-print(f"Scheduled total: {sum(report.scheduled_demand)}")
-print(f"Actual total:    {sum(report.actual_demand)}")
-print(f"Gap: {report.gap_pct_total:.1f}%")  # expect ~22% on realistic data
+print(f"Scheduled total: {sum(report.total_scheduled_demand)}")
+print(f"Actual total:    {sum(report.total_actual_demand)}")
+print(f"Arrival gap:   {report.arrival_gap_pct_total:.1f}%")
+print(f"Departure gap: {report.departure_gap_pct_total:.1f}%")
 ```
 
 ---
@@ -105,12 +112,12 @@ else:
 
 ## Notebook
 
-A full interactive prototype with plots is in:
+A full validation notebook with plots is in:
 ```
 notebooks/planning/ramp_resource_lp.ipynb
 ```
 
-The notebook imports from `src/lp` after the extraction step and demonstrates all eight user stories against a sample Finavia-style schedule.
+The notebook imports from `src/lp` and demonstrates all nine user stories against the EFHK reference dataset.
 
 ---
 

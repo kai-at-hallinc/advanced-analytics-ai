@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-ramp-resource-lp`
 **Created**: 2026-04-17
-**Updated**: 2026-04-18 (departure demand extension)
+**Updated**: 2026-04-19 (departure demand extension; US reordering; FR-003/FR-008 clarifications)
 **Status**: Draft
 **Input**: User description: "A two-stage LP that converts a flight schedule and actual arrival data into the minimum number of ground-handling worker shifts needed to cover every operational hour at a Finavia airport. Stage 1 computes per-slot worker demand adjusted for aircraft type and delays; Stage 2 schedules the fewest shift-starts that satisfy that demand across the full operating day"
 
@@ -123,8 +123,9 @@ A Resource Planner knows that the flight schedule does not always reflect realit
 
 **Acceptance Scenarios**:
 
-1. **Given** an aircraft type is marked as delayed, **When** demand is calculated, **Then** only 20% of that type's scheduled count is attributed to the original slot and 80% is attributed to the actual arrival slot.
+1. **Given** an aircraft type is marked as delayed for arrivals (`arrival_delay_flags`), **When** demand is calculated, **Then** only 20% of that type's scheduled arrival count is attributed to the original slot and 80% is attributed to the actual arrival slot.
 2. **Given** an aircraft type is on time, **When** demand is calculated, **Then** its count at the scheduled slot is unchanged.
+3. **Given** an aircraft type is marked as delayed for departures (`departure_delay_flags`), **When** demand is calculated, **Then** only 20% of that type's scheduled departure count stays at the original departure slot and 80% moves to the actual departure slot — independently of any arrival delay flag for the same type.
 
 ---
 
@@ -203,6 +204,7 @@ A Resource Planner needs flights that miss their scheduled slot by more than the
 1. **Given** a flight scheduled at 09:00 that actually arrives at 09:10, and a tolerance window of ±15 minutes, **When** the arrival is classified, **Then** it is treated as on time and resources are allocated at 09:00.
 2. **Given** a flight scheduled at 09:00 that actually arrives at 09:25, and a tolerance window of ±15 minutes, **When** the arrival is classified, **Then** it falls outside the window, is reclassified to the 09:00+ slot matching its actual arrival time, and zero resources are allocated at the original 09:00 slot.
 3. **Given** the tolerance window is changed from the default 15 minutes to 10 minutes, **When** a flight arrives 12 minutes late, **Then** it is classified as outside the window and reallocated — demonstrating that the threshold is configurable.
+4. **Given** a departure scheduled at 14:00 that actually departs at 14:20, and a tolerance window of ±15 minutes, **When** the departure is classified, **Then** it falls outside the window and the departure preparation demand window is anchored at the 14:00 actual departure slot — not the 14:00 scheduled slot.
 
 ---
 

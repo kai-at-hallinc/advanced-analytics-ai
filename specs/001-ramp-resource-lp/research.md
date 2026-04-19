@@ -72,10 +72,10 @@ dep_j = Σ_i  Σ_{k=0}^{W_dep_i - 1}  departures(i, j+k) · c_dep_i
 
 **Input modes** (arrivals and departures each independently support 3 modes per FR-003/FR-015):
 
-| actuals provided | delay_flags provided | Mode applied |
-| ---------------- | -------------------- | ------------ |
-| Yes | — | Actual counts used directly |
-| No | Yes | 20/80 heuristic on scheduled counts |
+| actuals provided | arrival_delay_flags / departure_delay_flags provided | Mode applied |
+| ---------------- | ---------------------------------------------------- | ------------ |
+| Yes | — | Actual counts used directly (per direction) |
+| No | Yes | 20/80 heuristic on scheduled counts (per direction independently) |
 | No | No | Scheduled counts used unchanged |
 
 **Infeasibility**: When `r_j > R` for any slot `j`, detected pre-solve; structured error identifies offending slots.

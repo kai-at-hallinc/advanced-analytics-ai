@@ -42,7 +42,7 @@ types as dataclasses and tests in pytest.
 
 **No violations. Complexity Tracking not required.**
 
-**Post-Phase 1 re-check**: Departure demand extension adds fields to `FlightSlotInput` and `DemandConfig` and a new `DepartureComparisonReport` structure. Confirmed no new abstractions beyond what the spec requires.
+**Post-Phase 1 re-check**: Departure demand extension adds fields to `FlightSlotInput` and `DemandConfig` and extends the `ComparisonReport` structure with departure-direction fields. Confirmed no new abstractions beyond what the spec requires.
 
 ## Project Structure
 
@@ -78,7 +78,7 @@ tests/lp/                       ← NEW: test suite mirroring src/lp/
 └── test_analysis.py            ← US9, FR-008–FR-009, SC-003–SC-005
 
 notebooks/planning/
-└── ramp_resource_lp.ipynb      ← NEW: prototype notebook (Principle II); imports src/lp once extracted
+└── ramp_resource_lp.ipynb      ← NEW: validation notebook (Principle II); imports src/lp — logic not re-implemented inline
 
 business_problems/
 ├── ramp_resource_minimization_formulation.md    ← EXISTING: mathematical derivation (keep)
