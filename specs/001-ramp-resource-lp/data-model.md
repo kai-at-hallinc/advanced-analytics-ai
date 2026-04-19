@@ -53,18 +53,18 @@ Represents a single flight movement with minute-level timestamps. Used when tole
 class FlightMovementInput:
     aircraft_type: AircraftType
     op_type: Literal['A', 'D']    # 'A' = arrival, 'D' = departure
-    scheduled_dt: int              # minutes from midnight (scheduled time)
-    actual_dt: int | None = None   # minutes from midnight (actual time); None → use scheduled_dt
+    scheduled_minutes: int              # minutes from midnight (scheduled time)
+    actual_minutes: int | None = None   # minutes from midnight (actual time); None → use scheduled_minutes
 ```
 
 **Validation rules**:
 
-- `scheduled_dt` must be in `[operating_day_start * 60, operating_day_end * 60)`.
-- `actual_dt` if provided: departure pre-window clipping applies silently if it falls before `operating_day_start * 60`; an out-of-window actual arrival raises `ValueError`.
+- `scheduled_minutes` must be in `[operating_day_start * 60, operating_day_end * 60)`.
+- `actual_minutes` if provided: departure pre-window clipping applies silently if it falls before `operating_day_start * 60`; an out-of-window actual arrival raises `ValueError`.
 - `aircraft_type` must be a valid `AircraftType` member.
 - `op_type` must be `'A'` or `'D'`; any other value raises `ValueError`.
 
-**Slot assignment**: `floor(scheduled_dt / 60)` or `floor(actual_dt / 60)` after tolerance check.
+**Slot assignment**: `floor(scheduled_minutes / 60)` or `floor(actual_minutes / 60)` after tolerance check.
 
 ---
 
