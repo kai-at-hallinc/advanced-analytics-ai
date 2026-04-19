@@ -16,7 +16,7 @@
 - Q: Does one aircraft arrival generate demand across multiple consecutive slots? → A: Yes — demand spans the full arrival window per aircraft type (narrow-body 1 h, wide-body 2 h, cargo 3 h)
 - Q: Default operating day start and end hours? → A: 05:00–23:00 (18 hourly slots)
 - Q: Python API types for compute_demand() and schedule_shifts() inputs/outputs? → A: dataclasses / TypedDict — typed, zero extra dependencies
-- Q: How do FR-002 (delay-flag model) and FR-003 (actual-arrivals mode) combine in compute_demand()? → A: Single function — compute_demand(scheduled, actuals=None, delay_flags=None); actuals used directly when provided, 20/80 heuristic applied when only delay flags given
+- Q: How do FR-002 (delay-flag model) and FR-003 (actual-arrivals mode) combine in compute_demand()? → A: Single function — compute_demand(scheduled, actuals=None, arrival_delay_flags=None, departure_delay_flags=None, actual_movements=None); actuals used directly when provided, 20/80 heuristic applied when only delay flags given; arrival and departure delay flags are independent parameters so each direction can be flagged separately; actual_movements (list[FlightMovementInput] with minute-level timestamps) enables ±tolerance-minute slot reclassification per FR-011
 - Q: Is 'superjumbo' in Key Entities a real supported category or illustrative only? → A: Illustrative only — canonical categories are narrow-body, wide-body, and cargo
 - Q: Do departing aircraft contribute to worker demand independently of whether a same-day arrival at HEL exists? → A: Yes — ground time may span hours or days, aircraft may come from maintenance or a prior-day rotation, and hub feeder traffic means arrival handling and departure preparation are unrelated operations; each movement triggers demand independently.
 - Q: Does the arrival window cover the full ground cycle including departure preparation, or only the arrival handling portion? → A: Arrival handling only (unloading, cleaning, catering after landing). Departure preparation is a separate backward-looking window ending at the departure slot. Operators should recalibrate arrival window values to reflect arrival handling duration, not full ground time.
@@ -24,7 +24,7 @@
 - Q: Are departure window durations the same as arrival window durations? → A: Default to the same durations (narrow-body 1 h, wide-body 2 h, cargo 3 h); configurable independently per run.
 - Q: How are departure delays modelled? → A: The same 20/80 heuristic as arrivals: 20% of scheduled departure count attributed to the original slot, 80% to the actual departure slot.
 - Q: What happens when a departure's backward preparation window extends before the operating day start (e.g., 06:00 departure with a 2-hour window needing demand at 04:00)? → A: Clip silently — the departure window is truncated at operating day start; only slots within the operating day contribute to the demand curve.
-- Q: Should FR-008's comparison report be extended to cover departure demand (scheduled vs actual) alongside arrivals, or remain arrival-only? → A: Extend FR-008 — one unified report covering scheduled vs actual demand for both arrivals and departures per aircraft type per slot.
+- Q: Should FR-008's comparison report be extended to cover departure demand (scheduled vs actual) alongside arrivals, or remain arrival-only? → A: Extend FR-008 — one unified report covering scheduled vs actual demand for both arrivals and departures, reported at the direction level (arrival aggregate vs departure aggregate per slot). Per-aircraft-type breakdown within each direction is deferred to planned extension 9.
 - Q: Do departure counts support the same 3-mode input pattern as arrivals (scheduled-only, delay flags, or actual departure counts)? → A: Yes — same 3-mode pattern: actual departure counts take precedence over the heuristic when provided; delay flags apply the 20/80 heuristic when no actuals are supplied; scheduled counts are used unchanged when neither is provided.
 - Q: Should the ±15-minute on-time tolerance window (FR-011) apply to departures as well as arrivals — reclassifying departure demand to the actual departure slot when outside tolerance? → A: Yes — same ±15-minute tolerance applies; departure demand is reclassified to the actual departure slot when the flight departs outside the window.
 - Q: SC-003 asserts a ≥15% gap between actual and scheduled demand — is this a meaningful system criterion or an empirical observation from Sahadevan? → A: It is a dataset observation, not a system guarantee. The system does not predict or enforce any gap magnitude; it faithfully reflects whatever difference exists in the input counts. SC-003 should be reframed as a verifiable system property rather than a threshold tied to a specific study.
@@ -97,7 +97,23 @@ A Resource Planner starts with the day's flight schedule — how many aircraft o
 
 ---
 
-### User Story 2 - Delay-Adjusted Demand (Priority: P2)
+### User Story 2 - Independent Departure Demand (Priority: P2)
+
+A Resource Planner at Helsinki-Vantaa needs the demand curve to reflect departure preparation staffing independently of whether the departing aircraft landed at HEL earlier that day. An aircraft may have arrived the previous day, come from scheduled maintenance, or be repositioned from another stand — in all cases, ground handlers must prepare it for departure and that labour must appear in the demand curve. If the system counts only arrivals, every departure whose associated arrival falls outside the operating day is silently missing, and the schedule produced by Stage 2 will be short-staffed during pre-departure banks.
+
+**Why this priority**: Helsinki-Vantaa is a hub airport with feeder traffic; ground time ranges from under one hour to multiple days. Because flight movements do not follow a fixed cycle, arrival handling demand and departure preparation demand must each be computed from the actual movement slot — not inferred from one another. Failing to do so causes systematic under-staffing at departure-heavy hours regardless of how accurately arrivals are modelled.
+
+**Independent Test**: Can be validated by supplying a schedule containing only departure counts for a single slot (zero arrivals across the entire day) and confirming the system produces a non-zero demand curve at the slots covered by the departure window, equal to departure count multiplied by the departure staffing standard.
+
+**Acceptance Scenarios**:
+
+1. **Given** a schedule containing departures but no arrivals, **When** demand is calculated, **Then** the demand curve is non-zero at the slots covered by the departure window and the system does not treat the day as having zero demand.
+2. **Given** a schedule with arrivals at 08:00 and departures at 14:00 for the same aircraft type, **When** demand is calculated, **Then** arrival demand appears at 08:00 (and its arrival window) and departure demand appears ending at 14:00 (its departure window) independently — neither is derived from the other.
+3. **Given** a departure staffing standard that differs from the arrival standard for the same aircraft type, **When** demand is calculated, **Then** departures use the departure standard and arrivals use the arrival standard with no cross-contamination.
+
+---
+
+### User Story 3 - Delay-Adjusted Demand (Priority: P3)
 
 A Resource Planner knows that the flight schedule does not always reflect reality — delays shift aircraft into later slots, changing where workers are needed. When delays are expected or confirmed, the planner wants the demand curve to reflect actual rather than scheduled movements, so they do not over-staff the original slot and under-staff the slot where the flight actually lands.
 
@@ -112,7 +128,7 @@ A Resource Planner knows that the flight schedule does not always reflect realit
 
 ---
 
-### User Story 3 - Minimum Shift Schedule (Priority: P3)
+### User Story 4 - Minimum Shift Schedule (Priority: P4)
 
 A Resource Planner receives the hourly demand curve from Stage 1 and needs to know: how few workers need to be hired to meet that demand across the full operating day? A worker hired for ie. an 8-hour shift covers multiple hours, so hiring one more person at 06:00 satisfies demand at 06:00 through 13:00. The system finds the fewest shift starts that ensure every hour is covered.
 
@@ -128,7 +144,7 @@ A Resource Planner receives the hourly demand curve from Stage 1 and needs to kn
 
 ---
 
-### User Story 4 - Accurate Daily Headcount (Priority: P4)
+### User Story 5 - Accurate Daily Headcount (Priority: P5)
 
 A Resource Planner needs to review the headcounts with a Unit Manager. The presented count must reflect distinct individuals — a worker covering an 8-hour shift must appear once, not once per hour. The system must produce a total that is payroll-ready with no deduplication required downstream.
 
@@ -143,7 +159,7 @@ A Resource Planner needs to review the headcounts with a Unit Manager. The prese
 
 ---
 
-### User Story 5 - Capacity Constraint Enforcement (Priority: P5)
+### User Story 6 - Capacity Constraint Enforcement (Priority: P6)
 
 An Operations Manager needs assurance that the model never schedules more workers than there actually are in ground-handling pool. If demand at any hour would exceed the available workforce, the system must surface this clearly rather than silently under-reporting.
 
@@ -158,7 +174,7 @@ An Operations Manager needs assurance that the model never schedules more worker
 
 ---
 
-### User Story 6 - Aircraft-Type Staffing Standards (Priority: P6)
+### User Story 7 - Aircraft-Type Staffing Standards (Priority: P7)
 
 A Resource Planner needs the staffing level per flight to automatically reflect the feasible or contractual standard for each aircraft category — narrow-body flights require fewer workers than wide-body. When no custom standard has been configured for a type, the system must fall back to known category defaults so the planner never needs to look up the number manually or risk using an inconsistent figure.
 
@@ -174,7 +190,7 @@ A Resource Planner needs the staffing level per flight to automatically reflect 
 
 ---
 
-### User Story 7 - On-Time Window Classification (Priority: P7)
+### User Story 8 - On-Time Window Classification (Priority: P8)
 
 A Resource Planner needs flights that miss their scheduled slot by more than the agreed tolerance — whether delayed or arriving early — to have their worker allocation automatically moved to the actual arrival slot. If a flight scheduled at 09:00 lands at 09:25, workers standing at the gate since 09:00 are idle for 25 minutes; if it lands at 08:40, the crew scheduled for 09:00 arrives too late. The system must detect both cases and reallocate demand to the correct slot.
 
@@ -190,7 +206,7 @@ A Resource Planner needs flights that miss their scheduled slot by more than the
 
 ---
 
-### User Story 8 - Bottleneck Hour Identification (Priority: P8)
+### User Story 9 - Bottleneck Hour Identification (Priority: P9)
 
 An Unit Manager wants to know which specific hours of the day are forcing the total daily workforce higher. If the 07:00 and 14:00 slots are the binding constraints — meaning no further reduction in total headcount is possible without violating coverage at those hours — the manager can focus schedule negotiations or ramp-up coordination on exactly those hours rather than spreading effort evenly across the day.
 
@@ -203,22 +219,6 @@ An Unit Manager wants to know which specific hours of the day are forcing the to
 1. **Given** a solved shift schedule, **When** bottleneck analysis runs, **Then** it returns a list of hours where demand is exactly met by active workers — with no surplus — identified as bottleneck hours.
 2. **Given** an hour where active workers exceed demand by two or more, **When** bottleneck analysis runs, **Then** that hour is not flagged as a bottleneck.
 3. **Given** the bottleneck output, **When** it is viewed by an Operations Manager, **Then** each bottleneck hour is labelled with its clock time and the specific demand figure that is binding — no raw model output is exposed.
-
----
-
-### User Story 9 - Independent Departure Demand (Priority: P9)
-
-A Resource Planner at Helsinki-Vantaa needs the demand curve to reflect departure preparation staffing independently of whether the departing aircraft landed at HEL earlier that day. An aircraft may have arrived the previous day, come from scheduled maintenance, or be repositioned from another stand — in all cases, ground handlers must prepare it for departure and that labour must appear in the demand curve. If the system counts only arrivals, every departure whose associated arrival falls outside the operating day is silently missing, and the schedule produced by Stage 2 will be short-staffed during pre-departure banks.
-
-**Why this priority**: Helsinki-Vantaa is a hub airport with feeder traffic; ground time ranges from under one hour to multiple days. Because flight movements do not follow a fixed cycle, arrival handling demand and departure preparation demand must each be computed from the actual movement slot — not inferred from one another. Failing to do so causes systematic under-staffing at departure-heavy hours regardless of how accurately arrivals are modelled.
-
-**Independent Test**: Can be validated by supplying a schedule containing only departure counts for a single slot (zero arrivals across the entire day) and confirming the system produces a non-zero demand curve at the slots covered by the departure window, equal to departure count multiplied by the departure staffing standard.
-
-**Acceptance Scenarios**:
-
-1. **Given** a schedule containing departures but no arrivals, **When** demand is calculated, **Then** the demand curve is non-zero at the slots covered by the departure window and the system does not treat the day as having zero demand.
-2. **Given** a schedule with arrivals at 08:00 and departures at 14:00 for the same aircraft type, **When** demand is calculated, **Then** arrival demand appears at 08:00 (and its arrival window) and departure demand appears ending at 14:00 (its departure window) independently — neither is derived from the other.
-3. **Given** a departure staffing standard that differs from the arrival standard for the same aircraft type, **When** demand is calculated, **Then** departures use the departure standard and arrivals use the arrival standard with no cross-contamination.
 
 ---
 
@@ -243,15 +243,15 @@ A Resource Planner at Helsinki-Vantaa needs the demand curve to reflect departur
 
 - **FR-001**: System MUST compute the minimum workers required at each operating hour from the flight schedule, per-aircraft-type staffing standards, and per-aircraft-type arrival window durations. A single aircraft arrival occupies worker demand across all slots within its arrival window. The arrival window covers arrival handling only; departure preparation demand is computed separately per FR-013.
 - **FR-002**: System MUST adjust per-slot aircraft counts when a type is delayed, attributing 20% of scheduled count to the original slot and 80% to the actual arrival slot. This heuristic applies when only delay flags are available (no actual arrival counts).
-- **FR-003**: System MUST accept actual-arrival counts as an alternative to the 20/80 delay heuristic; when actuals are provided they are used directly. Both FR-002 and FR-003 are served by a single `compute_demand(scheduled, actuals=None, delay_flags=None)` function: when `actuals` is supplied FR-003 applies; when only `delay_flags` are supplied FR-002 applies; when neither is supplied scheduled counts are used unchanged.
+- **FR-003**: System MUST accept actual arrival and departure counts as alternatives to the 20/80 delay heuristic; when actuals are provided they are used directly. FR-002 and FR-003 are served by a single `compute_demand(scheduled, actuals=None, arrival_delay_flags=None, departure_delay_flags=None, actual_movements=None)` function. Per-direction precedence: when `actual_movements` is supplied, per-flight tolerance classification applies (FR-011); when slot-level `actuals` are supplied, they are used directly for the relevant direction; when only `arrival_delay_flags` / `departure_delay_flags` are supplied, the 20/80 heuristic applies independently per direction; when none are supplied, scheduled counts are used unchanged.
 - **FR-004**: System MUST enforce a workforce pool ceiling: if demand at any slot would exceed total available workers, the system MUST report infeasibility and identify the affected slots.
 - **FR-005**: System MUST produce a shift-start schedule that covers hourly demand using the fewest total workers, given a configurable uniform shift length.
 - **FR-006**: System MUST count each worker exactly once in the daily total, regardless of shift length.
 - **FR-007**: System MUST accept staffing standards (workers per flight) as a configurable input per aircraft type. Default values when no custom standard is provided: narrow-body 3 workers/flight, wide-body 5 workers/flight, cargo 6 workers/flight.
-- **FR-008**: System MUST produce a comparison output showing scheduled versus actual demand per aircraft type and per movement direction (arrival and departure) for the same time slot. The report must present arrival and departure gaps separately so the two can be analysed independently (Table 7-style report).
+- **FR-008**: System MUST produce a comparison output showing scheduled versus actual demand per movement direction (arrival and departure) for the same time slot. The report must present arrival and departure gaps separately so the two can be analysed independently. Per-aircraft-type demand breakdown is a planned extension (see Assumptions — planned extension 9).
 - **FR-009**: System MUST expose the bottleneck hours driving total workforce size, labelled by clock time and showing the demand figure that is binding.
 - **FR-010**: System MUST treat early-arriving aircraft as generating equal or greater resource demand per flight compared to on-time arrivals. An early arrival must not reduce the resource allocation for that arrival slot.
-- **FR-011**: System MUST classify each arrival and each departure as on-time or off-schedule based on a configurable tolerance window (default ±15 minutes). When an arrival falls outside the window, resources are allocated to the slot matching the actual arrival time. When a departure falls outside the window, the departure demand window is anchored to the actual departure slot. The same tolerance threshold applies to both directions; it is configurable per run and shared.
+- **FR-011**: System MUST classify each arrival and each departure as on-time or off-schedule based on a configurable tolerance window (default ±15 minutes). When an arrival falls outside the window, resources are allocated to the slot matching the actual arrival time. When a departure falls outside the window, the departure demand window is anchored to the actual departure slot. The same tolerance threshold applies to both directions; it is configurable per run and shared. Tolerance classification requires minute-level per-flight data supplied as `actual_movements: list[FlightMovementInput]`; when only slot-level `FlightSlotInput` actuals are provided, movements are already pre-aggregated to their actual slot and no further reclassification is applied.
 - **FR-012**: System MUST accept per-slot departure counts as a separate input per aircraft type alongside arrival counts. A slot may contain arrivals only, departures only, or both; absence of departure counts for a slot defaults to zero for all types.
 - **FR-013**: System MUST compute departure demand at each operating hour using the departure staffing standard and departure window per aircraft type, and sum it with arrival demand at each slot. A departure at slot j contributes workers at each of the W_dep consecutive slots ending at and including j (backward-looking departure window). Departure demand and arrival demand are computed independently and neither is derived from the other.
 - **FR-014**: System MUST accept departure staffing standards as a configurable input per aircraft type, independent of arrival staffing standards. Default values when not specified: narrow-body 3 workers per departure, wide-body 5 workers per departure, cargo 6 workers per departure.
@@ -259,6 +259,7 @@ A Resource Planner at Helsinki-Vantaa needs the demand curve to reflect departur
 
 ### Key Entities
 
+- **FlightMovementInput**: An individual flight record carrying minute-level scheduled and actual timestamps for a single movement (`scheduled_dt` and `actual_dt` as minutes from midnight, plus `aircraft_type` and `op_type`). Used as `actual_movements` in `compute_demand()` when tolerance-window slot reclassification (FR-011) is needed. When `actual_dt` is within `tolerance_minutes` of `scheduled_dt` the movement is on-time and assigned to `floor(scheduled_dt / 60)`; otherwise it is assigned to `floor(actual_dt / 60)`. When only slot-level `FlightSlotInput` actuals are provided, flights are already aggregated to their actual slot and no reclassification is applied.
 - **Flight Slot**: A one-hour window defined by its position in the operating day (default range: 05:00–23:00); characterised by the count of each aircraft type arriving within it and the count of each aircraft type departing from it. Total slot demand is the sum of contributions from arrivals whose arrival window covers this slot and from departures whose departure window covers this slot — each computed independently.
 - **Aircraft Type**: A category of aircraft — one of narrow-body, wide-body, or cargo — defined by its staffing standard (the number of workers required per flight of that type), its arrival window duration, and its departure window duration.
 - **Demand Curve**: The ordered series of minimum worker counts required at each slot across the full operating day; the output of Stage 1 and the input to Stage 2.
@@ -292,7 +293,7 @@ A Resource Planner at Helsinki-Vantaa needs the demand curve to reflect departur
 - The workforce pool size is a fixed known input for each run; the system does not model hiring or dynamic pool expansion.
 - Scheduled and actual arrival counts are provided as inputs; the system does not fetch or predict them. Predicting actual arrival times is a separate forecasting task outside this scope.
 - The following are explicitly out of scope for this version: stand and gate allocation optimisation; real-time rescheduling; predicting actual flight arrival times; linking specific arriving and departing aircraft as turnaround pairs; multi-day ground time modelling.
-- The following are planned extensions to be addressed in later phases: (1) multiple worker roles per aircraft turn with role-specific staffing standards; (2) morning and evening joint shift scheduling with configurable boundary hours; (3) rolling 7-day horizon with daily forecast refresh; (4) part-time workers with half-length shifts; (5) variable staffing standard per aircraft type within a contractual min/max range; (6) probabilistic arrival window derived from ground handling task networks using Monte Carlo simulation; (7) linking specific arrival and departure movements as turnaround pairs; (8) multi-day ground time modelling.
+- The following are planned extensions to be addressed in later phases: (1) multiple worker roles per aircraft turn with role-specific staffing standards; (2) morning and evening joint shift scheduling with configurable boundary hours; (3) rolling 7-day horizon with daily forecast refresh; (4) part-time workers with half-length shifts; (5) variable staffing standard per aircraft type within a contractual min/max range; (6) probabilistic arrival window derived from ground handling task networks using Monte Carlo simulation; (7) linking specific arrival and departure movements as turnaround pairs; (8) multi-day ground time modelling; (9) per-aircraft-type demand gap breakdown in the comparison report (FR-008 currently reports direction-level aggregates only).
 - The default operating day runs from 05:00 to 23:00, producing 18 hourly decision-variable slots. Both stages use this window; the boundary is configurable per run. Movements outside the operating window (e.g., pre-dawn arrivals before 05:00) must be filtered by the caller before passing data to `compute_demand()`; the LP module raises `ValueError` for any `FlightSlotInput` with an out-of-range hour and does not silently discard it.
 - The system is delivered as a Python module exposing typed function signatures (e.g., `compute_demand(...)` and `schedule_shifts(...)`). It may be called from scripts, notebooks, or future API layers without coupling to any delivery format.
 - The LP implementation uses Google OR-Tools (GLOP linear solver). Integer rounding of fractional shift counts uses ceiling arithmetic applied post-solve, not a MIP branch-and-bound step.

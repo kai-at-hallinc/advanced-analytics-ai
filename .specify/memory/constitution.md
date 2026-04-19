@@ -5,7 +5,7 @@ Bump type: MAJOR — initial formal ratification from blank template.
 
 Principles resolved:
 - [PRINCIPLE_1_NAME] → I. Module-First (new)
-- [PRINCIPLE_2_NAME] → II. Notebook-Driven Prototyping (new)
+- [PRINCIPLE_2_NAME] → II. Notebook-Driven Validation (amended 2026-04-19)
 - [PRINCIPLE_3_NAME] → III. Test Coverage Required (new)
 - [PRINCIPLE_4_NAME] → IV. Reproducibility (new)
 - [PRINCIPLE_5_NAME] → V. Simplicity & Educational Clarity (new)
@@ -45,17 +45,18 @@ modules with no substantive logic are not permitted.
 **Rationale**: Modular boundaries prevent entanglement, enable incremental
 delivery, and keep the codebase navigable as the domain surface grows.
 
-### II. Notebook-Driven Prototyping
+### II. Notebook-Driven Validation
 
-All new algorithms or analytical methods MUST be prototyped in a Jupyter
-notebook under `notebooks/` before being extracted to `src/`. Notebooks serve
-as living documentation and experimentation records. Once a pattern is
-validated in a notebook, the implementation MUST be extracted to the
-appropriate `src/` module and the notebook updated to import from `src/`
-rather than re-implementing inline logic.
+All algorithms implemented in `src/` MUST have a corresponding Jupyter
+notebook under `notebooks/` that demonstrates and validates the implementation
+against realistic inputs. The notebook serves as living documentation and a
+test-run record; it MUST import from `src/` rather than re-implementing logic
+inline. Notebooks MAY be created concurrently with or after `src/`
+implementation.
 
-**Rationale**: Notebooks enable rapid exploration; the extraction rule keeps
-`src/` as the authoritative, tested implementation.
+**Rationale**: Notebooks provide a human-readable validation layer and
+experimentation record; the import rule keeps `src/` as the single
+authoritative implementation.
 
 ### III. Test Coverage Required
 
@@ -110,8 +111,8 @@ clarity is a first-class quality attribute alongside correctness.
 ## Development Workflow
 
 1. All new work MUST be developed on a feature branch from `main`.
-2. The standard delivery flow is: notebook prototype → `src/` extraction →
-   `tests/` coverage → PR review → merge to `main`.
+2. The standard delivery flow is: `src/` extraction → `tests/` coverage →
+   notebook validation → PR review → merge to `main`.
 3. `pytest` MUST pass with zero failures before a PR is opened.
 4. Business problem formulations (e.g., LP/IP models) belong under
    `business_problems/` and MUST reference the relevant `src/` solver module
@@ -133,6 +134,7 @@ this file, (2) increments the version per the versioning policy below,
 (4) receives at least one approval before merge.
 
 **Versioning policy**:
+
 - MAJOR: backward-incompatible governance changes, principle removals, or
   redefinitions that invalidate existing practice.
 - MINOR: new principle or section added, or materially expanded guidance.
@@ -143,4 +145,4 @@ before merge. Violations MUST either be resolved or documented in a
 Complexity Tracking table in the relevant implementation plan. Use `README.md`
 for runtime development guidance that supplements this constitution.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-15 | **Last Amended**: 2026-04-17
+**Version**: 1.1.0 | **Ratified**: 2026-04-15 | **Last Amended**: 2026-04-19

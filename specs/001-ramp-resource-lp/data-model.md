@@ -44,6 +44,30 @@ class FlightSlotInput:
 
 ---
 
+### FlightMovementInput
+
+Represents a single flight movement with minute-level timestamps. Used when tolerance-window slot reclassification (FR-011) is needed. Pass a list of these as `actual_movements` to `compute_demand()`.
+
+```python
+@dataclass
+class FlightMovementInput:
+    aircraft_type: AircraftType
+    op_type: Literal['A', 'D']    # 'A' = arrival, 'D' = departure
+    scheduled_dt: int              # minutes from midnight (scheduled time)
+    actual_dt: int | None = None   # minutes from midnight (actual time); None → use scheduled_dt
+```
+
+**Validation rules**:
+
+- `scheduled_dt` must be in `[operating_day_start * 60, operating_day_end * 60)`.
+- `actual_dt` if provided: departure pre-window clipping applies silently if it falls before `operating_day_start * 60`; an out-of-window actual arrival raises `ValueError`.
+- `aircraft_type` must be a valid `AircraftType` member.
+- `op_type` must be `'A'` or `'D'`; any other value raises `ValueError`.
+
+**Slot assignment**: `floor(scheduled_dt / 60)` or `floor(actual_dt / 60)` after tolerance check.
+
+---
+
 ### DemandConfig
 
 All configurable parameters for Stage 1.
@@ -105,18 +129,21 @@ Output of `compute_demand()` — Stage 1 result.
 ```python
 @dataclass
 class DemandResult:
-    demand_curve: list[int]           # workers required at each slot; index 0 = operating_day_start hour
-    feasible: bool                    # False if any slot exceeds pool_size
-    infeasible_slots: list[int]       # clock hours where demand > pool_size (empty if feasible)
-    operating_hours: list[int]        # clock hours covered, e.g. [5, 6, ..., 22]
+    demand_curve: list[int]                # combined workers per slot (arrival + departure)
+    arrival_demand_curve: list[int]        # arrival component only; index 0 = operating_day_start
+    departure_demand_curve: list[int]      # departure component only; index 0 = operating_day_start
+    feasible: bool                         # False if any slot exceeds pool_size
+    infeasible_slots: list[int]            # clock hours where demand > pool_size (empty if feasible)
+    operating_hours: list[int]             # clock hours covered, e.g. [5, 6, ..., 22]
 ```
 
 **Invariants**:
 
-- `len(demand_curve) == len(operating_hours)`.
+- `len(demand_curve) == len(arrival_demand_curve) == len(departure_demand_curve) == len(operating_hours)`.
+- `demand_curve[i] == arrival_demand_curve[i] + departure_demand_curve[i]` for all `i`.
 - When `feasible=True`, `infeasible_slots` is empty.
-- All `demand_curve` values ≥ 0.
-- `demand_curve[i]` is the sum of arrival contributions and departure contributions at that slot — neither is derived from the other.
+- All values in all three curves ≥ 0.
+- Neither `arrival_demand_curve` nor `departure_demand_curve` is derived from the other (FR-013).
 
 ---
 
@@ -180,7 +207,9 @@ class BottleneckResult:
 
 ### ComparisonReport
 
-Output of `comparison_report()` — FR-008 Table 7-style output covering both movement directions.
+Output of `comparison_report()` — FR-008 direction-level output covering arrival and departure gaps independently.
+
+**Scope**: Direction-level aggregates only. Per-aircraft-type breakdown is planned extension 9 (see spec.md §Assumptions).
 
 ```python
 @dataclass
@@ -251,7 +280,8 @@ DEFAULT_SHIFT_LENGTH: int = 8
 ## Entity Relationship Summary
 
 ```text
-FlightSlotInput ──(many)──> compute_demand() ──> DemandResult
+FlightSlotInput     ──(many)──> compute_demand() ──> DemandResult
+FlightMovementInput ──(many)──>      |
 DemandConfig    ──(config)──|                        |
                                                      |
                                               schedule_shifts() ──> ShiftSchedule

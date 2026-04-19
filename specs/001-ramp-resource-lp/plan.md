@@ -34,7 +34,7 @@ types as dataclasses and tests in pytest.
 | Principle | Requirement | Status |
 | --------- | ----------- | ------ |
 | I. Module-First | New `src/lp/` module, self-contained, independently importable and testable | ✅ Pass |
-| II. Notebook-Driven | `notebooks/planning/ramp_resource_lp.ipynb` prototype first; `src/lp/` is the extraction target | ✅ Pass |
+| II. Notebook-Driven Validation | `notebooks/planning/ramp_resource_lp.ipynb` validates `src/lp/` against realistic EFHK inputs; imports from `src/` — logic not re-implemented inline | ✅ Pass |
 | III. Test Coverage | `tests/lp/` mirrors `src/lp/`; every public function has a corresponding test; pytest only | ✅ Pass |
 | IV. Reproducibility | GLOP is deterministic; `ortools` declared in `pyproject.toml` under `lp` optional group | ✅ Pass |
 | V. Simplicity | Two-stage LP follows Sahadevan + textbook formulations; YAGNI applied; departure demand added as additive term, not new solver stage | ✅ Pass |
@@ -73,9 +73,9 @@ src/lp/                         ← NEW: LP solver module
 tests/lp/                       ← NEW: test suite mirroring src/lp/
 ├── __init__.py
 ├── test_types.py               ← validates defaults and dataclass invariants (including departure fields)
-├── test_demand.py              ← US1–US2, US5–US9, FR-001 to FR-004, FR-010–FR-015; departure boundary clipping
-├── test_scheduling.py          ← US3–US4, FR-005–FR-006, SC-002, SC-006
-└── test_analysis.py            ← US8, FR-008–FR-009, SC-003–SC-005
+├── test_demand.py              ← US1–US3, US6–US8, FR-001 to FR-004, FR-010–FR-015; departure boundary clipping
+├── test_scheduling.py          ← US4–US5, FR-005–FR-006, SC-002, SC-006
+└── test_analysis.py            ← US9, FR-008–FR-009, SC-003–SC-005
 
 notebooks/planning/
 └── ramp_resource_lp.ipynb      ← NEW: prototype notebook (Principle II); imports src/lp once extracted

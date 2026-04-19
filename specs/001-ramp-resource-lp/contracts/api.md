@@ -16,18 +16,23 @@ All types are defined in `src/lp/types.py`. See [data-model.md](../data-model.md
 def compute_demand(
     scheduled: list[FlightSlotInput],
     actuals: list[FlightSlotInput] | None = None,
-    delay_flags: dict[AircraftType, bool] | None = None,
+    arrival_delay_flags: dict[AircraftType, bool] | None = None,
+    departure_delay_flags: dict[AircraftType, bool] | None = None,
+    actual_movements: list[FlightMovementInput] | None = None,
     config: DemandConfig = DEFAULT_DEMAND_CONFIG,
 ) -> DemandResult:
 ```
 
-### Input mode precedence (arrivals and departures independently, FR-003 / FR-015)
+### Input mode precedence (arrivals and departures evaluated independently, FR-003 / FR-015)
 
-| Inputs supplied | Mode applied |
-|-----------------|-------------|
-| `actuals` provided | Use `arrival_counts` / `departure_counts` from actuals directly; no 20/80 split |
-| `delay_flags` only (no `actuals`) | Apply `n_ij = s_ij · (1 − 0.8·d_i)` per delayed aircraft type (arrivals); same heuristic for departures |
-| Neither `actuals` nor `delay_flags` | Scheduled counts used unchanged for both arrivals and departures |
+| Arrivals | Departures | Mode applied |
+| -------- | ---------- | ----------- |
+| `actual_movements` provided | `actual_movements` provided | Per-flight tolerance classification against `scheduled_dt`/`actual_dt` |
+| `actuals.arrival_counts` | `actuals.departure_counts` | Slot-level actuals used directly; no tolerance reclassification |
+| `arrival_delay_flags` | `departure_delay_flags` | 20/80 heuristic: `n_ij = s_ij · (1 − 0.8·d_i)` per flagged type |
+| neither | neither | Scheduled counts used unchanged |
+
+`actual_movements` takes precedence over `actuals` for the direction(s) it covers. `actuals` takes precedence over delay flags per direction.
 
 ### Demand computation per slot (FR-001, FR-013)
 
@@ -57,12 +62,14 @@ Arrival demand and departure demand are computed independently; neither is deriv
 
 ### On-time classification (FR-011)
 
-When `actuals` are provided at finer-than-slot granularity (minute-level `t_ij`):
+Tolerance classification is only available when `actual_movements: list[FlightMovementInput]` is provided. Each `FlightMovementInput` carries `scheduled_dt` and `actual_dt` in minutes-from-midnight.
 
-- `|t_ij − scheduled_j| ≤ tolerance_minutes` → on time; resources attributed to `scheduled_j`
-- Otherwise → resources attributed to `actual_slot(t_ij)`
+- `|actual_dt − scheduled_dt| ≤ tolerance_minutes` → on time; resources attributed to `floor(scheduled_dt / 60)`
+- Otherwise → resources attributed to `floor(actual_dt / 60)`
 
-Applies to both arrival and departure movements (FR-011).
+Applies to both arrival (`op_type='A'`) and departure (`op_type='D'`) movements (FR-011).
+
+When only slot-level `actuals: list[FlightSlotInput]` are provided (no `actual_movements`), flights are already pre-aggregated to their actual slot — no tolerance reclassification is applied.
 
 ### Early arrivals (FR-010)
 
@@ -163,14 +170,14 @@ def comparison_report(
 
 Calls `compute_demand(scheduled)` and `compute_demand(actuals=actuals)` separately, decomposing results into arrival and departure demand components. Computes per-slot and aggregate gap figures for each direction independently (FR-008).
 
-Produces a Table 7-style report with:
+Produces a direction-level comparison report (see `ComparisonReport` in data-model.md for full field layout):
 
 - Per-slot arrival gap: `actual_arrival_demand[i] - scheduled_arrival_demand[i]`
 - Per-slot departure gap: `actual_departure_demand[i] - scheduled_departure_demand[i]`
 - Aggregate `arrival_gap_pct_total` and `departure_gap_pct_total` as percentages of scheduled totals
 - Combined `total_scheduled_demand` and `total_actual_demand` per slot
 
-The report faithfully reflects whatever difference exists in the inputs (SC-003). No empirical threshold is asserted.
+The report faithfully reflects whatever difference exists in the inputs (SC-003). No empirical threshold is asserted. Per-aircraft-type breakdown is a planned extension (spec.md §Assumptions, extension 9).
 
 ---
 
@@ -180,6 +187,7 @@ The report faithfully reflects whatever difference exists in the inputs (SC-003)
 from .types import (
     AircraftType,
     FlightSlotInput,
+    FlightMovementInput,
     DemandConfig,
     DemandResult,
     ShiftConfig,
@@ -199,7 +207,7 @@ from .scheduling import schedule_shifts
 from .analysis import identify_bottlenecks, comparison_report
 
 __all__ = [
-    "AircraftType", "FlightSlotInput", "DemandConfig", "DemandResult",
+    "AircraftType", "FlightSlotInput", "FlightMovementInput", "DemandConfig", "DemandResult",
     "ShiftConfig", "ShiftSchedule", "BottleneckResult", "ComparisonReport",
     "DEFAULT_DEMAND_CONFIG", "DEFAULT_SHIFT_CONFIG",
     "compute_demand", "schedule_shifts", "identify_bottlenecks", "comparison_report",
