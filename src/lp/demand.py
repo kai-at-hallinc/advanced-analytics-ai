@@ -13,8 +13,6 @@ Precedence per direction (highest to lowest):
 """
 from __future__ import annotations
 
-from collections import defaultdict
-
 from src.lp.types import (
     AircraftType,
     DemandConfig,
@@ -23,6 +21,7 @@ from src.lp.types import (
     FlightSlotInput,
     DEFAULT_DEMAND_CONFIG,
 )
+from src.utils.lp_utils import _resolve_flight_counts, _spread_demand
 
 
 def compute_demand(
@@ -50,89 +49,17 @@ def compute_demand(
     n_slots = len(operating_hours)
     hour_to_idx = {h: i for i, h in enumerate(operating_hours)}
 
-    # --- Resolve effective arrival counts per hour ---
-    # Precedence: actual_movements (US8, not implemented) > actuals > arrival_delay_flags > scheduled
-    arr_counts: dict[int, dict[AircraftType, float]] = defaultdict(lambda: defaultdict(float))
-    if actuals is not None:
-        for slot in actuals:
-            for ac_type, c in slot.arrival_counts.items():
-                arr_counts[slot.hour][ac_type] = float(c)
-    elif arrival_delay_flags:
-        for slot in scheduled:
-            for ac_type in AircraftType:
-                c = slot.arrival_counts.get(ac_type, 0)
-                if c == 0:
-                    continue
-                if arrival_delay_flags.get(ac_type, False):
-                    # 20/80 heuristic: 20% stay at original slot, 80% shift to next
-                    arr_counts[slot.hour][ac_type] += c * 0.2
-                    next_hour = slot.hour + 1
-                    if next_hour < config.operating_day_end:
-                        arr_counts[next_hour][ac_type] += c * 0.8
-                else:
-                    arr_counts[slot.hour][ac_type] += float(c)
-    else:
-        for slot in scheduled:
-            for ac_type, c in slot.arrival_counts.items():
-                arr_counts[slot.hour][ac_type] = float(c)
-
-    # --- Resolve effective departure counts per hour ---
-    # Precedence: actual_movements (US8, not implemented) > actuals > departure_delay_flags > scheduled
-    dep_counts: dict[int, dict[AircraftType, float]] = defaultdict(lambda: defaultdict(float))
-    if actuals is not None:
-        for slot in actuals:
-            for ac_type, c in slot.departure_counts.items():
-                dep_counts[slot.hour][ac_type] = float(c)
-    elif departure_delay_flags:
-        for slot in scheduled:
-            for ac_type in AircraftType:
-                c = slot.departure_counts.get(ac_type, 0)
-                if c == 0:
-                    continue
-                if departure_delay_flags.get(ac_type, False):
-                    # 20/80 heuristic: 20% stay at original slot, 80% shift to next
-                    dep_counts[slot.hour][ac_type] += c * 0.2
-                    next_hour = slot.hour + 1
-                    if next_hour < config.operating_day_end:
-                        dep_counts[next_hour][ac_type] += c * 0.8
-                else:
-                    dep_counts[slot.hour][ac_type] += float(c)
-    else:
-        for slot in scheduled:
-            for ac_type, c in slot.departure_counts.items():
-                dep_counts[slot.hour][ac_type] = float(c)
+    # --- Resolve effective arrival/departure counts per hour ---
+    # Precedence: actual_movements (US8, not implemented) > actuals > delay_flags > scheduled
+    arr_counts, dep_counts = _resolve_flight_counts(
+        scheduled, actuals, arrival_delay_flags, departure_delay_flags, config.operating_day_end
+    )
 
     # --- Arrival demand (forward window) ---
-    arrival_demand = [0.0] * n_slots
-    for hour, counts in arr_counts.items():
-        if hour not in hour_to_idx:
-            continue
-        start_idx = hour_to_idx[hour]
-        for ac_type, count in counts.items():
-            if count == 0.0:
-                continue
-            standard = config.staffing_standards[ac_type]
-            window = config.arrival_window_slots[ac_type]
-            for k in range(window):
-                target_idx = start_idx + k
-                if target_idx < n_slots:
-                    arrival_demand[target_idx] += count * standard
+    arrival_demand = _spread_demand(arr_counts, hour_to_idx, n_slots, config.staffing_standards, config.arrival_window_slots)
 
     # --- Departure demand (backward window) ---
-    departure_demand = [0.0] * n_slots
-    for hour, counts in dep_counts.items():
-        if hour not in hour_to_idx:
-            continue
-        dep_idx = hour_to_idx[hour]
-        for ac_type, count in counts.items():
-            if count == 0.0:
-                continue
-            standard = config.departure_staffing_standards[ac_type]
-            window = config.departure_window_slots[ac_type]
-            for k in range(window):
-                target_idx = dep_idx - k
-                if target_idx >= 0:
-                    departure_demand[target_idx] += count * standard
+    departure_demand = _spread_demand(dep_counts, hour_to_idx, n_slots, config.departure_staffing_standards, config.departure_window_slots, backward=True)
 
     # --- Convert to int and combine ---
     arrival_int = [round(v) for v in arrival_demand]
