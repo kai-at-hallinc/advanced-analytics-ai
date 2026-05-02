@@ -19,6 +19,7 @@ ml = ["qpsolvers"]
 deep_learning = ["keras", "tensorflow"]
 mcp = ["mcp"]
 dev = ["pytest", "pytest-cov"]
+lp = ["ortools"]
 
 [tool.setuptools.packages.find]
 where = ["."]

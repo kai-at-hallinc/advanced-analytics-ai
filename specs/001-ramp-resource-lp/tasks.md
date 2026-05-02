@@ -19,10 +19,10 @@
 
 **Purpose**: Create module skeleton, install dependencies, configure tools.
 
-- [ ] T001 Create directories `src/lp/`, `tests/lp/`, `notebooks/planning/` per plan.md structure
-- [ ] T002 Update `pyproject.toml` — add `[project.optional-dependencies]` group `lp = ["ortools"]`
-- [ ] T003 [P] Create `src/lp/__init__.py` stub (empty exports list, docstring)
-- [ ] T004 [P] Create `tests/lp/__init__.py` stub (empty file)
+- [X] T001 Create directories `src/lp/`, `tests/lp/`, `notebooks/planning/` per plan.md structure
+- [X] T002 Update `pyproject.toml` — add `[project.optional-dependencies]` group `lp = ["ortools"]`
+- [X] T003 [P] Create `src/lp/__init__.py` stub (empty exports list, docstring)
+- [X] T004 [P] Create `tests/lp/__init__.py` stub (empty file)
 
 ---
 
@@ -32,8 +32,8 @@
 
 **⚠️ CRITICAL**: No user story implementation can begin until this phase is complete.
 
-- [ ] T005 Implement `src/lp/types.py` — `AircraftType` enum (NARROW_BODY, WIDE_BODY, CARGO); dataclasses `FlightSlotInput` (hour, arrival_counts, departure_counts), `FlightMovementInput` (aircraft_type, op_type: Literal['A','D'], scheduled_minutes: int, actual_minutes: int|None), `DemandConfig` (staffing_standards, arrival_window_slots, departure_staffing_standards, departure_window_slots, tolerance_minutes, pool_size, operating_day_start, operating_day_end), `DemandResult` (demand_curve, arrival_demand_curve, departure_demand_curve, feasible, infeasible_slots, operating_hours), `ShiftConfig`, `ShiftSchedule`, `BottleneckResult`, `ComparisonReport`; constants `DEFAULT_STAFFING_STANDARDS`, `DEFAULT_ARRIVAL_WINDOW_SLOTS`, `DEFAULT_DEPARTURE_STAFFING_STANDARDS`, `DEFAULT_DEPARTURE_WINDOW_SLOTS`, `DEFAULT_OPERATING_HOURS`
-- [ ] T006 [P] Write `tests/lp/test_types.py` — validate `AircraftType` enum values; `DemandConfig` defaults (3/5/6, 1/2/3 slots); `FlightSlotInput` missing-type defaults to 0; `FlightMovementInput` validation (invalid op_type raises `ValueError`, out-of-range `scheduled_minutes` raises `ValueError`); `DemandResult` invariants: `len(demand_curve) == len(arrival_demand_curve) == len(departure_demand_curve) == len(operating_hours)` and `demand_curve[i] == arrival_demand_curve[i] + departure_demand_curve[i]`; `ShiftSchedule` invariant `daily_headcount == sum(shift_starts_rounded.values())`; `ComparisonReport` list-length invariants; `ValueError` raised for out-of-range hour and negative counts
+- [X] T005 Implement `src/lp/types.py` — `AircraftType` enum (NARROW_BODY, WIDE_BODY, CARGO); dataclasses `FlightSlotInput` (hour, arrival_counts, departure_counts), `FlightMovementInput` (aircraft_type, op_type: Literal['A','D'], scheduled_minutes: int, actual_minutes: int|None), `DemandConfig` (staffing_standards, arrival_window_slots, departure_staffing_standards, departure_window_slots, tolerance_minutes, pool_size, operating_day_start, operating_day_end), `DemandResult` (demand_curve, arrival_demand_curve, departure_demand_curve, feasible, infeasible_slots, operating_hours), `ShiftConfig`, `ShiftSchedule`, `BottleneckResult`, `ComparisonReport`; constants `DEFAULT_STAFFING_STANDARDS`, `DEFAULT_ARRIVAL_WINDOW_SLOTS`, `DEFAULT_DEPARTURE_STAFFING_STANDARDS`, `DEFAULT_DEPARTURE_WINDOW_SLOTS`, `DEFAULT_OPERATING_HOURS`
+- [X] T006 [P] Write `tests/lp/test_types.py` — validate `AircraftType` enum values; `DemandConfig` defaults (3/5/6, 1/2/3 slots); `FlightSlotInput` missing-type defaults to 0; `FlightMovementInput` validation (invalid op_type raises `ValueError`, out-of-range `scheduled_minutes` raises `ValueError`); `DemandResult` invariants: `len(demand_curve) == len(arrival_demand_curve) == len(departure_demand_curve) == len(operating_hours)` and `demand_curve[i] == arrival_demand_curve[i] + departure_demand_curve[i]`; `ShiftSchedule` invariant `daily_headcount == sum(shift_starts_rounded.values())`; `ComparisonReport` list-length invariants; `ValueError` raised for out-of-range hour and negative counts
 
 **Checkpoint**: All types are importable and type-checked — user story implementation can now begin.
 
@@ -45,9 +45,9 @@
 
 **Independent Test**: Pass a single-slot schedule with 2 wide-body arrivals; confirm demand_curve at that slot equals 2 × 5 = 10 and spans 2 slots (wide-body arrival window = 2 h). Confirm all other slots are 0.
 
-- [ ] T007 [US1] Write `tests/lp/test_demand.py` for US1 — single-type single-slot (narrow/wide/cargo); multi-type same slot sums independently; arrival window spanning multiple slots; empty schedule returns all-zero curve; out-of-range hour raises `ValueError`; duplicate hour raises `ValueError`
-- [ ] T008 [US1] Implement `compute_demand()` in `src/lp/demand.py` — scheduled-only mode; iterate slots, expand each arrival count forward across `arrival_window_slots` for its type; return `DemandResult` with demand_curve, arrival_demand_curve (= computed arrival demand), departure_demand_curve (= all-zeros; no departures in US1 scheduled-only mode), feasible=True, infeasible_slots=[], operating_hours
-- [ ] T009 [US1] Update `src/lp/__init__.py` — export `compute_demand`, `AircraftType`, `FlightSlotInput`, `FlightMovementInput`, `DemandConfig`, `DemandResult`, `DEFAULT_DEMAND_CONFIG`
+- [X] T007 [US1] Write `tests/lp/test_demand.py` for US1 — single-type single-slot (narrow/wide/cargo); multi-type same slot sums independently; arrival window spanning multiple slots; empty schedule returns all-zero curve; out-of-range hour raises `ValueError`; duplicate hour raises `ValueError`
+- [X] T008 [US1] Implement `compute_demand()` in `src/lp/demand.py` — scheduled-only mode; iterate slots, expand each arrival count forward across `arrival_window_slots` for its type; return `DemandResult` with demand_curve, arrival_demand_curve (= computed arrival demand), departure_demand_curve (= all-zeros; no departures in US1 scheduled-only mode), feasible=True, infeasible_slots=[], operating_hours
+- [X] T009 [US1] Update `src/lp/__init__.py` — export `compute_demand`, `AircraftType`, `FlightSlotInput`, `FlightMovementInput`, `DemandConfig`, `DemandResult`, `DEFAULT_DEMAND_CONFIG`
 
 **Checkpoint**: `compute_demand(scheduled=[...])` returns a correct demand curve — US1 fully functional.
 
@@ -59,8 +59,8 @@
 
 **Independent Test**: Pass a schedule with zero arrivals and 1 wide-body departure at 14:00; confirm `demand_curve` is non-zero at slots 13:00 and 14:00 (backward window = 2 h), values equal 1 × 5 = 5 each, all other slots 0. Confirm `departure_demand_curve` matches and `arrival_demand_curve` is all-zeros.
 
-- [ ] T026 [US2] Add departure demand tests to `tests/lp/test_demand.py` — departure-only schedule produces non-zero demand; arrival+departure independent (different standards, no cross-contamination); backward window correct (dep at slot m → demand at m−W_dep+1…m); departure boundary clipping (dep at 05:00 with 3-slot window clips to 05:00 only, no pre-day slots); `DemandResult.departure_demand_curve` non-zero, `arrival_demand_curve` all-zero for departure-only input; same slot with both arrivals and departures: demands summed independently
-- [ ] T027 [US2] Extend `compute_demand()` in `src/lp/demand.py` — add backward departure window loop iterating `departure_counts` per slot from `scheduled`; apply `departure_staffing_standards`; clip window at `operating_day_start`; sum arrival and departure contributions into `demand_curve`; populate `arrival_demand_curve` and `departure_demand_curve` as separate outputs on `DemandResult`
+- [X] T026 [US2] Add departure demand tests to `tests/lp/test_demand.py` — departure-only schedule produces non-zero demand; arrival+departure independent (different standards, no cross-contamination); backward window correct (dep at slot m → demand at m−W_dep+1…m); departure boundary clipping (dep at 05:00 with 3-slot window clips to 05:00 only, no pre-day slots); `DemandResult.departure_demand_curve` non-zero, `arrival_demand_curve` all-zero for departure-only input; same slot with both arrivals and departures: demands summed independently
+- [X] T027 [US2] Extend `compute_demand()` in `src/lp/demand.py` — add backward departure window loop iterating `departure_counts` per slot from `scheduled`; apply `departure_staffing_standards`; clip window at `operating_day_start`; sum arrival and departure contributions into `demand_curve`; populate `arrival_demand_curve` and `departure_demand_curve` as separate outputs on `DemandResult`
 
 **Checkpoint**: `compute_demand()` produces correct combined demand with independent sub-curves — US2 fully functional.
 
