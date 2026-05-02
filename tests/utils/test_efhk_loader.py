@@ -82,3 +82,20 @@ class TestLoadEfhk:
         _, movements = load_efhk(str(DATASET))
         for m in movements:
             assert 5 * 60 <= m.scheduled_minutes < 23 * 60
+
+    def test_use_actual_times_returns_slots_in_operating_window(self):
+        slots, _ = load_efhk(str(DATASET), use_actual_times=True)
+        assert len(slots) > 0
+        for s in slots:
+            assert 5 <= s.hour < 23, f"Hour {s.hour} outside window"
+
+    def test_use_actual_times_no_duplicate_hours(self):
+        slots, _ = load_efhk(str(DATASET), use_actual_times=True)
+        hours = [s.hour for s in slots]
+        assert len(hours) == len(set(hours))
+
+    def test_use_actual_times_false_is_default_behaviour(self):
+        # Both calls should produce the same slot aggregation
+        slots_default, _ = load_efhk(str(DATASET))
+        slots_explicit, _ = load_efhk(str(DATASET), use_actual_times=False)
+        assert [s.hour for s in slots_default] == [s.hour for s in slots_explicit]

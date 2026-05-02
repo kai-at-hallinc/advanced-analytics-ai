@@ -33,7 +33,7 @@
 **Purpose**: Integration layer — EFHK CSV loader, UTC→Helsinki conversion, ICAO mapping (constitution rule 5: data-loading utilities in `src/utils/`).
 
 - [X] T035 [P] Create `src/utils/__init__.py` — re-exports `load_efhk`, `ICAO_TO_LP_CATEGORY`
-- [X] T036 [P] Implement `src/utils/efhk_loader.py` — UTC→Helsinki via `ZoneInfo("Europe/Helsinki")`; ICAO code → `AircraftType` mapping (`AT75`, `AT76`, A320/B737-family → `NARROW_BODY`; A330/A350/B77x-family → `WIDE_BODY`; `flight_type_iata=F` → `CARGO`); operating-window filter (05:00–23:00 Helsinki); aggregate to `list[FlightSlotInput]`; extract `actual_arrival_time`/`actual_departure_time` → `FlightMovementInput` by default (`extract_actuals=True`); null actual → `actual_minutes=None`
+- [X] T036 [P] Implement `src/utils/efhk_loader.py` — UTC→Helsinki via `ZoneInfo("Europe/Helsinki")`; ICAO code → `AircraftType` mapping (`AT75`, `AT76`, A320/B737-family → `NARROW_BODY`; A330/A350/B77x-family → `WIDE_BODY`; `flight_type_iata=F` → `CARGO`); operating-window filter (05:00–23:00 Helsinki); aggregate to `list[FlightSlotInput]`; extract `actual_arrival_time`/`actual_departure_time` → `FlightMovementInput` by default (`extract_actuals=True`); null actual → `actual_minutes=None`; `use_actual_times=True` aggregates slots by actual time (falls back to scheduled when null)
 - [X] T037 [P] Write `tests/utils/test_efhk_loader.py` — ICAO mapping (AT76 → NARROW_BODY, A359 → WIDE_BODY, `flight_type_iata=F` overrides airframe); UTC→Helsinki conversion (2026-03-27 UTC+2); all hours within operating window; no duplicate hours; actuals extracted by default; actuals suppressed when `extract_actuals=False`; all movements have valid `op_type`; all `scheduled_minutes` in window
 
 ---
@@ -84,8 +84,8 @@
 
 **Independent Test**: Mark narrow-body as delayed (`arrival_delay_flags`); confirm original arrival slot drops to 20% and actual slot receives 80%. Mark wide-body as departure-delayed (`departure_delay_flags`); confirm same split for departures independently. Then pass `actuals` directly and confirm no 20/80 split is applied for either direction.
 
-- [ ] T010 [US3] Add `arrival_delay_flags` and `departure_delay_flags` test cases to `tests/lp/test_demand.py` — arrival delayed type: 20% at original slot, 80% at actual slot; departure delayed type: same heuristic applied independently; on-time type unchanged in both directions; mixed delayed/on-time in same slot; `actuals.arrival_counts` overrides arrival delay heuristic; `actuals.departure_counts` overrides departure delay heuristic (FR-015); scheduled used unchanged when neither provided; arrival_delay_flags does not affect departure counts and vice versa
-- [ ] T011 [US3] Extend `compute_demand()` in `src/lp/demand.py` — add `arrival_delay_flags` branch applying `n_ij = s_ij · (1 − 0.8·d_i)` per delayed arrival type; add `departure_delay_flags` branch applying same heuristic per delayed departure type independently; add `actuals` branch using `arrival_counts`/`departure_counts` directly per direction (FR-015 precedence for departures); enforce per-direction precedence (actual_movements → actuals → arrival_delay_flags / departure_delay_flags → scheduled)
+- [X] T010 [US3] Add `arrival_delay_flags` and `departure_delay_flags` test cases to `tests/lp/test_demand.py` — arrival delayed type: 20% at original slot, 80% at actual slot; departure delayed type: same heuristic applied independently; on-time type unchanged in both directions; mixed delayed/on-time in same slot; `actuals.arrival_counts` overrides arrival delay heuristic; `actuals.departure_counts` overrides departure delay heuristic (FR-015); scheduled used unchanged when neither provided; arrival_delay_flags does not affect departure counts and vice versa
+- [X] T011 [US3] Extend `compute_demand()` in `src/lp/demand.py` — add `arrival_delay_flags` branch applying `n_ij = s_ij · (1 − 0.8·d_i)` per delayed arrival type; add `departure_delay_flags` branch applying same heuristic per delayed departure type independently; add `actuals` branch using `arrival_counts`/`departure_counts` directly per direction (FR-015 precedence for departures); enforce per-direction precedence (actual_movements → actuals → arrival_delay_flags / departure_delay_flags → scheduled)
 
 **Checkpoint**: All delay modes work correctly for both directions — US3 fully functional.
 
@@ -249,9 +249,9 @@ Merge compute_demand() extensions from US3, US6, US8 carefully — all modify th
 
 ### Current Status (as of 2026-05-02)
 
-Completed phases: **1, 1b, 2, 3, 4** (US1 + US2 fully done; US6 implementation done, tests partial; US7 tests done)
+Completed phases: **1, 1b, 2, 3, 4, 5** (US1 + US2 + US3 fully done; US6 implementation done, tests partial; US7 tests done; `load_efhk()` extended with `use_actual_times` parameter)
 
-Next up: **US3 (Phase 5)** — delay-adjusted demand (T010, T011)
+Next up: **US4 (Phase 6)** — `schedule_shifts()` LP (T012, T013, T014)
 
 ### Incremental Delivery
 

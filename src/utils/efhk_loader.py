@@ -75,6 +75,7 @@ def load_efhk(
     operating_day_start: int = 5,
     operating_day_end: int = 23,
     extract_actuals: bool = True,
+    use_actual_times: bool = False,
 ) -> tuple[list[FlightSlotInput], list[FlightMovementInput] | None]:
     """Load a Finavia EFHK CSV and return scheduled slots and optional per-flight movements.
 
@@ -97,12 +98,17 @@ def load_efhk(
         the actual time column is empty are treated as on-time
         (``actual_minutes=None``). When ``False``, the second return value is
         ``None``.
+    use_actual_times:
+        When ``True``, aggregate ``FlightSlotInput`` slots by actual arrival/
+        departure time instead of scheduled time. Rows with a null actual time
+        fall back to scheduled time for slot assignment. Useful for building
+        the ``actuals`` argument to ``compute_demand()``. Default ``False``.
 
     Returns
     -------
     tuple[list[FlightSlotInput], list[FlightMovementInput] | None]
-        Scheduled slots aggregated by Helsinki hour, and per-flight movement
-        records (only when ``extract_actuals=True``).
+        Slots aggregated by the chosen time (scheduled or actual), and per-flight
+        movement records (only when ``extract_actuals=True``).
     """
     arrival_counts: dict[int, dict[AircraftType, int]] = defaultdict(lambda: defaultdict(int))
     departure_counts: dict[int, dict[AircraftType, int]] = defaultdict(lambda: defaultdict(int))
@@ -120,15 +126,28 @@ def load_efhk(
                 continue  # unrecognised ICAO — skip (non-revenue / unclassified)
 
             scheduled_minutes = _utc_iso_to_helsinki_minutes(scheduled_utc)
-            scheduled_hour = scheduled_minutes // 60
 
-            if not (operating_day_start <= scheduled_hour < operating_day_end):
+            # Determine which time drives slot assignment
+            if use_actual_times:
+                actual_col = "actual_arrival_time" if op_type == "A" else "actual_departure_time"
+                actual_raw_for_slot = row.get(actual_col, "").strip()
+                slot_minutes = (
+                    _utc_iso_to_helsinki_minutes(actual_raw_for_slot)
+                    if actual_raw_for_slot
+                    else scheduled_minutes  # fall back when actual is null
+                )
+            else:
+                slot_minutes = scheduled_minutes
+
+            slot_hour = slot_minutes // 60
+
+            if not (operating_day_start <= slot_hour < operating_day_end):
                 continue  # outside operating window
 
             if op_type == "A":
-                arrival_counts[scheduled_hour][ac_type] += 1
+                arrival_counts[slot_hour][ac_type] += 1
             elif op_type == "D":
-                departure_counts[scheduled_hour][ac_type] += 1
+                departure_counts[slot_hour][ac_type] += 1
             else:
                 continue  # unrecognised op_type
 

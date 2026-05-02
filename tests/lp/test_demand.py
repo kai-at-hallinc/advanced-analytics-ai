@@ -271,3 +271,121 @@ def test_custom_departure_staffing_standard_does_not_affect_arrival():
     # arrival uses staffing_standards (default 3), NOT departure_staffing_standards
     assert result.arrival_demand_curve[idx_10] == 3
     assert result.departure_demand_curve[idx_10] == 0
+
+
+# ---------------------------------------------------------------------------
+# US3: Delay-Adjusted Demand (T010)
+# ---------------------------------------------------------------------------
+
+def test_arrival_delay_flag_narrow_body_20_80_split():
+    # 5 NB arrivals at hour 10 delayed: 20% (1 flight) stays at 10, 80% (4 flights) shifts to 11
+    scheduled = [FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 5})]
+    result = compute_demand(scheduled, arrival_delay_flags={AircraftType.NARROW_BODY: True})
+    idx_10 = result.operating_hours.index(10)
+    idx_11 = result.operating_hours.index(11)
+    assert result.arrival_demand_curve[idx_10] == 3    # round(5*0.2)*3 = 1*3
+    assert result.arrival_demand_curve[idx_11] == 12   # round(5*0.8)*3 = 4*3
+    assert all(result.departure_demand_curve[i] == 0 for i in range(len(result.operating_hours)))
+
+
+def test_departure_delay_flag_wide_body_20_80_split():
+    # 5 WB departures at hour 14 delayed: 1 on-time at 14, 4 delayed at 15
+    # WB departure window=2 (backward); standard=5
+    # On-time (1 dep at 14): demand at slots 13, 14 = 5 each
+    # Delayed (4 deps at 15): demand at slots 14, 15 = 20 each
+    scheduled = [FlightSlotInput(hour=14, departure_counts={AircraftType.WIDE_BODY: 5})]
+    result = compute_demand(scheduled, departure_delay_flags={AircraftType.WIDE_BODY: True})
+    idx_13 = result.operating_hours.index(13)
+    idx_14 = result.operating_hours.index(14)
+    idx_15 = result.operating_hours.index(15)
+    assert result.departure_demand_curve[idx_13] == 5    # on-time only
+    assert result.departure_demand_curve[idx_14] == 25   # 5 (on-time) + 20 (delayed)
+    assert result.departure_demand_curve[idx_15] == 20   # delayed only
+    assert all(result.arrival_demand_curve[i] == 0 for i in range(len(result.operating_hours)))
+
+
+def test_mixed_arrival_delayed_and_on_time_same_slot():
+    # 5 NB arrivals (delayed) + 5 WB arrivals (on-time) at hour 10
+    # NB: 1 at slot 10, 4 at slot 11 (delay heuristic)
+    # WB: 5 at slots 10 and 11 (window=2, on-time)
+    scheduled = [FlightSlotInput(
+        hour=10,
+        arrival_counts={AircraftType.NARROW_BODY: 5, AircraftType.WIDE_BODY: 5},
+    )]
+    result = compute_demand(scheduled, arrival_delay_flags={AircraftType.NARROW_BODY: True})
+    idx_10 = result.operating_hours.index(10)
+    idx_11 = result.operating_hours.index(11)
+    # slot 10: NB 1*3=3 + WB 5*5=25 = 28
+    assert result.arrival_demand_curve[idx_10] == 28
+    # slot 11: NB delayed 4*3=12 + WB window 5*5=25 = 37
+    assert result.arrival_demand_curve[idx_11] == 37
+
+
+def test_arrival_delay_flag_does_not_affect_departure_counts():
+    # NB arrivals delayed; NB departure counts must remain at scheduled values
+    scheduled = [FlightSlotInput(
+        hour=10,
+        arrival_counts={AircraftType.NARROW_BODY: 5},
+        departure_counts={AircraftType.NARROW_BODY: 5},
+    )]
+    result = compute_demand(scheduled, arrival_delay_flags={AircraftType.NARROW_BODY: True})
+    idx_10 = result.operating_hours.index(10)
+    idx_11 = result.operating_hours.index(11)
+    # Arrivals: 1 at 10 (20%), 4 at 11 (80%)
+    assert result.arrival_demand_curve[idx_10] == 3
+    assert result.arrival_demand_curve[idx_11] == 12
+    # Departures: NB window=1 backward → slot 10 only (unchanged by arrival flag)
+    assert result.departure_demand_curve[idx_10] == 15   # 5*3
+    assert result.departure_demand_curve[idx_11] == 0    # no departure shift
+
+
+def test_departure_delay_flag_does_not_affect_arrival_counts():
+    # NB departures delayed; NB arrival counts must remain at scheduled values
+    scheduled = [FlightSlotInput(
+        hour=10,
+        arrival_counts={AircraftType.NARROW_BODY: 5},
+        departure_counts={AircraftType.NARROW_BODY: 5},
+    )]
+    result = compute_demand(scheduled, departure_delay_flags={AircraftType.NARROW_BODY: True})
+    idx_10 = result.operating_hours.index(10)
+    idx_11 = result.operating_hours.index(11)
+    # Arrivals: 5 NB on-time, window=1 → slot 10 only (unchanged by departure flag)
+    assert result.arrival_demand_curve[idx_10] == 15   # 5*3
+    assert result.arrival_demand_curve[idx_11] == 0
+    # Departures: 1 on-time at 10 (window=1 → 3), 4 delayed at 11 (window=1 → 12)
+    assert result.departure_demand_curve[idx_10] == 3
+    assert result.departure_demand_curve[idx_11] == 12
+
+
+def test_actuals_overrides_arrival_delay_flag():
+    # actuals provided with 4 NB arrivals → delay heuristic on arrivals must not apply
+    scheduled = [FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 5})]
+    actuals = [FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 4})]
+    result = compute_demand(
+        scheduled,
+        actuals=actuals,
+        arrival_delay_flags={AircraftType.NARROW_BODY: True},
+    )
+    idx_10 = result.operating_hours.index(10)
+    idx_11 = result.operating_hours.index(11)
+    # actuals win: 4 NB at 10, window=1 → demand=12; no delay split
+    assert result.arrival_demand_curve[idx_10] == 12
+    assert result.arrival_demand_curve[idx_11] == 0
+
+
+def test_actuals_overrides_departure_delay_flag():
+    # actuals provided with 3 WB departures → delay heuristic on departures must not apply
+    scheduled = [FlightSlotInput(hour=14, departure_counts={AircraftType.WIDE_BODY: 5})]
+    actuals = [FlightSlotInput(hour=14, departure_counts={AircraftType.WIDE_BODY: 3})]
+    result = compute_demand(
+        scheduled,
+        actuals=actuals,
+        departure_delay_flags={AircraftType.WIDE_BODY: True},
+    )
+    idx_13 = result.operating_hours.index(13)
+    idx_14 = result.operating_hours.index(14)
+    idx_15 = result.operating_hours.index(15)
+    # actuals win: 3 WB at 14, window=2 backward → slots 13, 14 = 15 each; no shift to 15
+    assert result.departure_demand_curve[idx_13] == 15
+    assert result.departure_demand_curve[idx_14] == 15
+    assert result.departure_demand_curve[idx_15] == 0
