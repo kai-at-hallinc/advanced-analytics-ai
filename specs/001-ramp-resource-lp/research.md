@@ -1,6 +1,6 @@
 # Research: Ramp Resource LP
 
-**Feature**: `001-ramp-resource-lp` | **Date**: 2026-04-18
+**Feature**: `001-ramp-resource-lp` | **Date**: 2026-04-18 (updated 2026-05-02: dataset, timezone, actuals extraction)
 
 All NEEDS CLARIFICATION items from Technical Context are resolved. Findings consolidated below.
 
@@ -161,26 +161,70 @@ class ComparisonReport:
 
 ## Decision 6: ICAO → LP Category Mapping and Pre-filtering Ownership
 
-**Decision**: ICAO code mapping and operating-window pre-filtering are the caller's responsibility, implemented in `business_problems/ramp_resource_lp.py`. The `src/lp/` module is strict: it raises `ValueError` for any `FlightSlotInput` with an out-of-range hour.
+**Decision**: ICAO code mapping and operating-window pre-filtering are the caller's responsibility, implemented in `src/utils/efhk_loader.py` (constitution rule 5: data-loading utilities belong in `src/utils/`). The `src/lp/` module is strict: it raises `ValueError` for any `FlightSlotInput` with an out-of-range hour.
 
-**Rationale**: Separation of concerns — the LP module solves the optimisation problem; the business layer handles airport-specific data preparation. The EFHK dataset has pre-dawn flights (04:40) and post-midnight flights (01:40) that fall outside the 05:00–23:00 operating day. The LP must not silently discard them (would mask data quality issues); the loader must explicitly filter.
+**Rationale**: Separation of concerns — the LP module solves the optimisation problem; the business layer handles airport-specific data preparation. The EFHK dataset has pre-dawn and post-midnight flights that fall outside the 05:00–23:00 Helsinki operating day. The LP must not silently discard them (would mask data quality issues); the loader must explicitly filter.
 
 **ICAO → LP category mapping** (for the EFHK reference dataset):
 
 | LP category | ICAO codes (present in dataset) | Rationale |
 | ----------- | ------------------------------- | --------- |
-| narrow_body | AT75, A319, A320, A321, A20N, B738, B38M, BCS3, E190 | Single-aisle aircraft ≤180 seats |
+| narrow_body | AT75, AT76, A319, A320, A321, A20N, A21N, B738, B38M, BCS3, E190 | Single-aisle aircraft ≤180 seats |
 | wide_body | A332, A333, A359 | Twin-aisle aircraft >180 seats |
 | cargo | Any type where `flight_type_iata = F` | Cargo designation overrides airframe class |
 
 **Pre-filtering rule** (implemented in `business_problems/ramp_resource_lp.py`):
 
 ```python
-operating_slots = {r['scheduled_time'] slot ∈ [day_start, day_end)}
-filtered = [s for s in slots if s.hour in operating_hours]
+from zoneinfo import ZoneInfo
+hel = ZoneInfo("Europe/Helsinki")
+helsinki_dt = utc_dt.astimezone(hel)
+# keep only movements where 5 <= helsinki_dt.hour < 23
 ```
 
-**Test dataset**: `data/finavia_flights_efhk_20260330.csv` — 447 rows, 223 arrivals + 224 departures, EFHK 2026-03-30. Dominant aircraft type: AT75 (96 movements). 7 cargo movements (flight_type_iata = F). Primary airline: AY (Finnair, 335 movements / 75%).
+**Reference dataset** (updated 2026-05-02): `data/finavia_flights_efhk_20260327.csv` — 422 rows, 209 arrivals + 213 departures, EFHK 2026-03-27. Dominant aircraft type: AT76 (100 movements). 10 cargo movements (`flight_type_iata = F`). Timestamps in UTC (`Z` suffix); Helsinki is UTC+2 (EET) on this pre-DST date. `airline_iata` column is not populated in this file.
+
+---
+
+## Decision 7: UTC → Helsinki Timezone Conversion
+
+**Decision**: Use `ZoneInfo("Europe/Helsinki")` from the Python standard library (`zoneinfo`, available in Python 3.9+) for all UTC → Helsinki local time conversions in the integration layer.
+
+**Rationale**: A hardcoded offset (e.g., +02:00) would be correct for 2026-03-27 (before DST) but silently wrong for any date in EEST (UTC+3, after DST on March 29). IANA timezone-aware conversion is one line of code with no extra dependencies and is correct for all dates. The operating-window filter and slot assignment (`floor(helsinki_hour)`) both depend on this conversion.
+
+**Alternatives considered**:
+- Fixed `timedelta(hours=2)`: correct for this file, brittle for any other date — rejected.
+- `pytz` / `dateutil`: external dependencies not needed when `zoneinfo` (stdlib) is available — rejected.
+
+**Implementation pattern**:
+```python
+from zoneinfo import ZoneInfo
+from datetime import datetime
+
+HEL = ZoneInfo("Europe/Helsinki")
+
+def utc_to_helsinki_hour(utc_iso: str) -> int:
+    dt = datetime.fromisoformat(utc_iso.replace('Z', '+00:00'))
+    return dt.astimezone(HEL).hour
+```
+
+---
+
+## Decision 8: Actuals Extraction from CSV (Default-On)
+
+**Decision**: The integration loader (`business_problems/ramp_resource_lp.py`) extracts `actual_arrival_time` and `actual_departure_time` from the CSV by default and builds `FlightMovementInput` records passed as `actual_movements` to `compute_demand()`. The caller may suppress this by passing `actual_movements=None` explicitly.
+
+**Rationale**: The actuals are already embedded in the EFHK dataset — ignoring them by default would mean FR-011 tolerance-window reclassification is never exercised in the standard integration path. Default-on extraction ensures realistic slot assignment out of the box. Rows where the actual time column is null/empty are treated as on-time (i.e., `actual_minutes = None` → `FlightMovementInput.actual_minutes = None`).
+
+**Null handling rule**:
+```python
+actual_minutes = None  # if actual_arrival_time / actual_departure_time is null or empty
+# FlightMovementInput.actual_minutes = None → treated as on-time (no reclassification)
+```
+
+**Alternatives considered**:
+- Opt-in flag: forces caller awareness but means FR-011 is never tested by default — rejected.
+- Separate loader functions: unnecessary duplication for a single boolean switch — rejected.
 
 ---
 
@@ -205,4 +249,6 @@ filtered = [s for s in slots if s.hour in operating_hours]
 | Bottleneck identification | Dual values from GLOP coverage constraints |
 | Out-of-range hour handling | `ValueError` raised by LP; caller pre-filters |
 | ICAO mapping ownership | `business_problems/ramp_resource_lp.py` (not `src/lp/`) |
-| Test dataset | `data/finavia_flights_efhk_20260330.csv` — 447 EFHK movements, 2026-03-30 |
+| Test dataset | `data/finavia_flights_efhk_20260327.csv` — 422 EFHK movements, 2026-03-27 (UTC timestamps, 16 cols, embedded actuals) |
+| UTC→Helsinki conversion | `ZoneInfo("Europe/Helsinki")` — DST-aware, stdlib, no extra deps |
+| Actuals extraction from CSV | Default-on; loader builds `FlightMovementInput` from actual time columns; null → treated as on-time |

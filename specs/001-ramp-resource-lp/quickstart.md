@@ -1,6 +1,6 @@
 # Quickstart: Ramp Resource LP
 
-**Feature**: `001-ramp-resource-lp` | **Date**: 2026-04-19
+**Feature**: `001-ramp-resource-lp` | **Date**: 2026-04-19 (updated 2026-05-02: EFHK dataset loader example)
 
 ---
 
@@ -110,6 +110,34 @@ else:
 
 ---
 
+---
+
+## Loading the EFHK Reference Dataset
+
+The integration layer (`src/utils/efhk_loader.py`) handles all dataset-specific concerns. It:
+- Converts UTC timestamps to Helsinki local time via `ZoneInfo("Europe/Helsinki")` (DST-aware)
+- Filters movements outside the 05:00–23:00 operating window
+- Maps ICAO codes to `AircraftType` (AT76/AT75 → `NARROW_BODY`, A359 → `WIDE_BODY`, `flight_type_iata=F` → `CARGO`)
+- Extracts `actual_arrival_time` / `actual_departure_time` columns by default and builds `FlightMovementInput` records for FR-011 tolerance-window reclassification
+
+```python
+from src.utils import load_efhk
+from src.lp import compute_demand, schedule_shifts
+
+# Default: actuals extracted → FR-011 tolerance-window reclassification applied
+scheduled, movements = load_efhk("data/finavia_flights_efhk_20260327.csv")
+demand = compute_demand(scheduled, actual_movements=movements)
+
+# Scheduled-only mode
+scheduled, _ = load_efhk("data/finavia_flights_efhk_20260327.csv", extract_actuals=False)
+demand_sched = compute_demand(scheduled)
+
+schedule = schedule_shifts(demand)
+print("Daily headcount:", schedule.daily_headcount)
+```
+
+---
+
 ## Notebook
 
 A full validation notebook with plots is in:
@@ -117,7 +145,7 @@ A full validation notebook with plots is in:
 notebooks/planning/ramp_resource_lp.ipynb
 ```
 
-The notebook imports from `src/lp` and demonstrates all nine user stories against the EFHK reference dataset.
+The notebook imports from `src/lp` and demonstrates all nine user stories against the EFHK reference dataset (`data/finavia_flights_efhk_20260327.csv`).
 
 ---
 

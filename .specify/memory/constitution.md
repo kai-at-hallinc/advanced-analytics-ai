@@ -10,6 +10,10 @@ Principles resolved:
 - [PRINCIPLE_4_NAME] → IV. Reproducibility (new)
 - [PRINCIPLE_5_NAME] → V. Simplicity & Educational Clarity (new)
 
+Version change: 1.1.0 → 1.2.0
+Bump type: MINOR — new workflow rule added (rule 5: src/utils/ for data-loading utilities).
+Changes: Development Workflow rule 4 clarified (business_problems/ scope); rule 5 added (src/utils/).
+
 Sections added:
 - Technology Stack & Constraints (formerly [SECTION_2_NAME])
 - Development Workflow (formerly [SECTION_3_NAME])
@@ -114,9 +118,16 @@ clarity is a first-class quality attribute alongside correctness.
 2. The standard delivery flow is: `src/` extraction → `tests/` coverage →
    notebook validation → PR review → merge to `main`.
 3. `pytest` MUST pass with zero failures before a PR is opened.
-4. Business problem formulations (e.g., LP/IP models) belong under
-   `business_problems/` and MUST reference the relevant `src/` solver module
-   rather than re-implementing solver logic inline.
+4. Business problem formulations (mathematical specs, notebooks, and
+   domain-level documentation) belong under `business_problems/`. A formulation
+   MUST reference the relevant `src/` solver module rather than re-implementing
+   solver logic inline.
+5. Data loading and integration utilities (e.g., CSV loaders, timezone
+   converters, external data mappers) belong under `src/utils/` as a standalone
+   module. Each utility file MUST have corresponding tests in `tests/utils/`
+   mirroring the `src/utils/` hierarchy. `src/utils/` MUST NOT contain
+   solver logic; it is strictly a data-preparation layer that calls into
+   solver modules.
 5. MCP tool implementations belong under `mcp/` and MUST be independently
    runnable and testable.
 6. Commit messages MUST be descriptive; each commit SHOULD correspond to one
@@ -145,4 +156,4 @@ before merge. Violations MUST either be resolved or documented in a
 Complexity Tracking table in the relevant implementation plan. Use `README.md`
 for runtime development guidance that supplements this constitution.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-15 | **Last Amended**: 2026-04-19
+**Version**: 1.2.0 | **Ratified**: 2026-04-15 | **Last Amended**: 2026-05-02
