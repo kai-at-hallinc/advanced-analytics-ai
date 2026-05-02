@@ -4,9 +4,11 @@
 **Branch**: `001-ramp-resource-lp`
 **Prerequisites**: plan.md ✅ | spec.md ✅ | research.md ✅ | data-model.md ✅ | contracts/api.md ✅
 
-**Tests**: Included — Constitution Principle III requires `tests/lp/` mirroring `src/lp/` with every public function covered.
+**Tests**: Included — Constitution Principle III requires `tests/lp/` and `tests/utils/` mirroring `src/` with every public function covered.
 
 **Organization**: Tasks grouped by user story (US1–US9) to enable independent implementation and testing of each story.
+
+**Last updated**: 2026-05-02 — audited against `src/lp/` and `tests/lp/`; T031 updated to `src/utils/efhk_loader.py`; T035–T037 added for completed utils module.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -23,6 +25,16 @@
 - [X] T002 Update `pyproject.toml` — add `[project.optional-dependencies]` group `lp = ["ortools"]`
 - [X] T003 [P] Create `src/lp/__init__.py` stub (empty exports list, docstring)
 - [X] T004 [P] Create `tests/lp/__init__.py` stub (empty file)
+
+---
+
+## Phase 1b: Utils Module (src/utils/)
+
+**Purpose**: Integration layer — EFHK CSV loader, UTC→Helsinki conversion, ICAO mapping (constitution rule 5: data-loading utilities in `src/utils/`).
+
+- [X] T035 [P] Create `src/utils/__init__.py` — re-exports `load_efhk`, `ICAO_TO_LP_CATEGORY`
+- [X] T036 [P] Implement `src/utils/efhk_loader.py` — UTC→Helsinki via `ZoneInfo("Europe/Helsinki")`; ICAO code → `AircraftType` mapping (`AT75`, `AT76`, A320/B737-family → `NARROW_BODY`; A330/A350/B77x-family → `WIDE_BODY`; `flight_type_iata=F` → `CARGO`); operating-window filter (05:00–23:00 Helsinki); aggregate to `list[FlightSlotInput]`; extract `actual_arrival_time`/`actual_departure_time` → `FlightMovementInput` by default (`extract_actuals=True`); null actual → `actual_minutes=None`
+- [X] T037 [P] Write `tests/utils/test_efhk_loader.py` — ICAO mapping (AT76 → NARROW_BODY, A359 → WIDE_BODY, `flight_type_iata=F` overrides airframe); UTC→Helsinki conversion (2026-03-27 UTC+2); all hours within operating window; no duplicate hours; actuals extracted by default; actuals suppressed when `extract_actuals=False`; all movements have valid `op_type`; all `scheduled_minutes` in window
 
 ---
 
@@ -112,8 +124,8 @@
 
 **Independent Test**: Set `pool_size=0` and pass any non-empty schedule; confirm `feasible=False`, `infeasible_slots` contains every non-zero-demand slot, and `demand_curve` is non-empty.
 
-- [ ] T017 [US6] Add pool enforcement tests to `tests/lp/test_demand.py` — demand ≤ pool_size → feasible=True, infeasible_slots=[]; demand > pool_size at one slot → feasible=False, that slot in infeasible_slots, curve still returned; pool_size=0 with any demand → all demand slots in infeasible_slots
-- [ ] T018 [US6] Add pool_size post-check to `compute_demand()` in `src/lp/demand.py` — after building demand_curve, scan each slot; if `r_j > pool_size` add to infeasible_slots; set feasible=False when infeasible_slots non-empty; always return full curve
+- [ ] T017 [US6] Add pool enforcement tests to `tests/lp/test_demand.py` — demand > pool_size at one slot → feasible=False, that slot in infeasible_slots, curve still returned; pool_size=0 with any demand → all demand slots in infeasible_slots *(note: feasible=True case already covered by existing test_feasible_true_when_demand_within_pool — add the infeasible=True cases only)*
+- [X] T018 [US6] Add pool_size post-check to `compute_demand()` in `src/lp/demand.py` — after building demand_curve, scan each slot; if `r_j > pool_size` add to infeasible_slots; set feasible=False when infeasible_slots non-empty; always return full curve
 
 **Checkpoint**: Infeasibility is surfaced clearly with specific slot identification — US6 fully functional.
 
@@ -125,8 +137,8 @@
 
 **Independent Test**: Override only the narrow-body arrival standard to 4; run a schedule with 1 narrow-body and 1 wide-body in the same slot; confirm narrow contributes 4 and wide contributes 5 (unchanged default).
 
-- [ ] T019 [P] [US7] Add custom arrival staffing standard tests to `tests/lp/test_demand.py` — overriding narrow standard doesn't affect wide or cargo; all-default produces 3/5/6; zero-count slot unchanged regardless of standard
-- [ ] T020 [P] [US7] Add custom departure staffing standard tests to `tests/lp/test_demand.py` — departure standard override does not cross-contaminate arrival standard for same aircraft type; `departure_staffing_standards` defaults match `staffing_standards`
+- [X] T019 [P] [US7] Add custom arrival staffing standard tests to `tests/lp/test_demand.py` — overriding narrow standard doesn't affect wide or cargo; all-default produces 3/5/6; zero-count slot unchanged regardless of standard
+- [X] T020 [P] [US7] Add custom departure staffing standard tests to `tests/lp/test_demand.py` — departure standard override does not cross-contaminate arrival standard for same aircraft type; `departure_staffing_standards` defaults match `staffing_standards`
 
 **Checkpoint**: Both arrival and departure staffing standards are independently configurable — US7 fully functional.
 
@@ -161,15 +173,15 @@
 
 ## Phase 12: Polish & Cross-Cutting Concerns
 
-**Purpose**: `comparison_report()`, full integration with EFHK data, and notebook prototype.
+**Purpose**: `comparison_report()`, full EFHK integration test, and notebook prototype.
 
 - [ ] T028 [P] Write `tests/lp/test_analysis.py` for comparison_report (FR-008) — `arrival_gap_absolute` and `departure_gap_absolute` computed correctly per slot from `DemandResult.arrival_demand_curve` / `departure_demand_curve`; aggregate pct_total formula correct; `total_scheduled/actual_demand[i] == arrival[i] + departure[i]`; all list lengths equal `len(hours)`; faithfully reflects input differences with no smoothing (SC-003)
 - [ ] T029 [P] Implement `comparison_report()` in `src/lp/analysis.py` — call `compute_demand(scheduled)` and `compute_demand(actuals=actuals)` separately; read `DemandResult.arrival_demand_curve` and `departure_demand_curve` directly (no recomputation); compute per-slot gaps and aggregate pct_total for each direction; return `ComparisonReport`
-- [ ] T030 Update `src/lp/__init__.py` — export `comparison_report`, `ComparisonReport`, `DEFAULT_DEPARTURE_STAFFING_STANDARDS`, `DEFAULT_DEPARTURE_WINDOW_SLOTS`, `DEFAULT_ARRIVAL_WINDOW_SLOTS`
-- [ ] T031 [P] Create `business_problems/ramp_resource_lp.py` — EFHK CSV loader reading `data/finavia_flights_efhk_20260330.csv`; ICAO → LP category mapping (AT75/A320-family/E190/B737-family → narrow_body; A332/A333/A359 → wide_body; flight_type_iata=F → cargo); operating-window pre-filter (drop hours outside 05:00–23:00); aggregates to `list[FlightSlotInput]` and calls `src/lp/`
-- [ ] T032 [P] Create `notebooks/planning/ramp_resource_lp.ipynb` — validation notebook loading EFHK data via `business_problems/ramp_resource_lp.py`; calling `compute_demand()` and `schedule_shifts()`; displaying demand curve, shift schedule, and bottleneck hours (Constitution Principle II)
-- [ ] T033 Run full end-to-end integration with `data/finavia_flights_efhk_20260330.csv` — verify demand curve is non-zero across operating hours, schedule_shifts produces feasible headcount, identify_bottlenecks returns results, no ValueError raised after ICAO mapping and window pre-filtering
-- [ ] T034 [P] Write performance benchmark in `tests/lp/` — run `compute_demand()` on the full 447-flight EFHK dataset (all 18 slots pre-filtered); assert wall-clock time < 30 s (SC-001)
+- [ ] T030 Update `src/lp/__init__.py` — export `schedule_shifts`, `identify_bottlenecks`, `comparison_report`, `ComparisonReport`, `ShiftConfig`, `ShiftSchedule`, `BottleneckResult`, `DEFAULT_DEPARTURE_STAFFING_STANDARDS`, `DEFAULT_DEPARTURE_WINDOW_SLOTS`, `DEFAULT_ARRIVAL_WINDOW_SLOTS`
+- [X] T031 [P] Create `src/utils/efhk_loader.py` — EFHK CSV loader reading `data/finavia_flights_efhk_20260327.csv`; UTC→Helsinki via `ZoneInfo("Europe/Helsinki")`; ICAO → LP category mapping; operating-window pre-filter (drop hours outside 05:00–23:00 Helsinki); aggregate to `list[FlightSlotInput]`; extract `actual_arrival_time`/`actual_departure_time` → `FlightMovementInput` (default-on)
+- [ ] T032 [P] Create `notebooks/planning/ramp_resource_lp.ipynb` — validation notebook importing from `src/lp` and `src/utils`; load EFHK data via `load_efhk("data/finavia_flights_efhk_20260327.csv")`; call `compute_demand()` and `schedule_shifts()`; display demand curve, shift schedule, and bottleneck hours (Constitution Principle II)
+- [ ] T033 Run full end-to-end integration with `data/finavia_flights_efhk_20260327.csv` (422 flights) — verify demand curve is non-zero across operating hours, schedule_shifts produces feasible headcount, identify_bottlenecks returns results, no ValueError raised after ICAO mapping and window pre-filtering
+- [ ] T034 [P] Write performance benchmark in `tests/lp/` — run `compute_demand()` on the full 422-flight EFHK dataset (all 18 slots pre-filtered via `load_efhk`); assert wall-clock time < 30 s (SC-001)
 
 ---
 
@@ -178,6 +190,7 @@
 ### Phase Dependencies
 
 - **Setup (Phase 1)**: No dependencies — start immediately
+- **Utils (Phase 1b)**: Depends on Phase 2 (imports `src/lp/types`); can be developed in parallel with Phase 2
 - **Foundational (Phase 2)**: Depends on Phase 1 — **BLOCKS all user story phases**
 - **US1 (Phase 3)**: Depends on Phase 2 — first story, no story dependencies
 - **US2 (Phase 4)**: Depends on Phase 3 (extends compute_demand with departure backward window)
@@ -210,14 +223,15 @@ All of the above → Polish (Phase 12)
 ### Parallel Opportunities (within Phases)
 
 - **Phase 1**: T003 and T004 are parallel (different stub files)
+- **Phase 1b**: T035, T036, T037 are parallel (different files)
 - **Phase 2**: T005 and T006 are parallel (types.py vs test_types.py)
 - **After US1 (Phase 3)**: US4 (Phase 6) and US6 (Phase 8) can both begin immediately (US4 needs only DemandResult; US6 only adds a post-check to compute_demand)
 - **After US2 (Phase 4)**: US3 (Phase 5), US7 (Phase 9), and US8 (Phase 10) can all begin in parallel (all require both directions to be present)
-- **Phase 12**: T028/T029, T031, T032 can all run in parallel (different files)
+- **Phase 12**: T028/T029, T032, T034 can all run in parallel (different files)
 
 ---
 
-## Parallel Example: After US1 Complete
+## Parallel Example: After US2 Complete
 
 Once Phase 4 (US2) is done, these stories can run concurrently:
 
@@ -227,33 +241,31 @@ Developer B: US4 (Phase 6) → US5 (Phase 7) | US9 (Phase 11) [parallel after US
 Developer C: US6 (Phase 8) → US7 (Phase 9)
 ```
 
-Merge compute_demand() extensions from US2, US3, US6, US8 carefully — all modify the same function; coordinate branch strategy to avoid conflicts.
+Merge compute_demand() extensions from US3, US6, US8 carefully — all modify the same function; coordinate branch strategy to avoid conflicts.
 
 ---
 
 ## Implementation Strategy
 
-### MVP First (US1 Only)
+### Current Status (as of 2026-05-02)
 
-1. Complete Phase 1: Setup
-2. Complete Phase 2: Foundational types
-3. Complete Phase 3: US1 — `compute_demand()` scheduled mode
-4. **STOP and VALIDATE**: Run `tests/lp/test_demand.py` for US1 independently
-5. Full notebook (T032) is Phase 12 — proceed to US2 (Phase 4) next
+Completed phases: **1, 1b, 2, 3, 4** (US1 + US2 fully done; US6 implementation done, tests partial; US7 tests done)
+
+Next up: **US3 (Phase 5)** — delay-adjusted demand (T010, T011)
 
 ### Incremental Delivery
 
-1. Setup + Foundational → types importable
-2. US1 → `compute_demand()` working on scheduled arrivals → MVP
-3. US2 → departure demand → full two-direction demand model
-4. US3 → delay adjustment (both directions) → delay-aware demand
-5. US4 → `schedule_shifts()` working → shift plan produceable
-6. US5 → daily headcount → payroll-ready output
-7. US6 → infeasibility detection → safe for production inputs
-8. US7 → configurable standards → calibration-ready
-9. US8 → on-time classification → actuals-ready
-10. US9 → bottleneck analysis → operational insight
-11. Phase 12 → comparison report + EFHK integration + notebook
+1. ✅ Setup + Utils + Foundational → types importable, EFHK loader working
+2. ✅ US1 → `compute_demand()` working on scheduled arrivals → MVP
+3. ✅ US2 → departure demand → full two-direction demand model
+4. → US3 → delay adjustment (both directions) → delay-aware demand
+5. → US4 → `schedule_shifts()` working → shift plan produceable
+6. → US5 → daily headcount → payroll-ready output
+7. → US6 → infeasibility detection tests → safe for production inputs
+8. → US7 → configurable standards (implementation done; tests verified)
+9. → US8 → on-time classification → actuals-ready
+10. → US9 → bottleneck analysis → operational insight
+11. → Phase 12 → comparison report + end-to-end integration + notebook
 
 ---
 
@@ -262,7 +274,8 @@ Merge compute_demand() extensions from US2, US3, US6, US8 carefully — all modi
 - `[P]` tasks touch different files — safe to run in parallel within a phase
 - `[Story]` label maps every implementation task to a spec user story for traceability
 - `compute_demand()` is extended incrementally across US1→US2→US3→US6→US8; test each extension independently before merging
-- The ICAO → LP category mapping (T031) is the caller's responsibility; the LP module (`src/lp/`) never sees raw ICAO codes
-- Operating-window pre-filtering (T031) must run before `compute_demand()` — flights before 05:00 or after 22:00 raise `ValueError` if passed to the LP
+- The ICAO → LP category mapping and operating-window pre-filtering are in `src/utils/efhk_loader.py` (constitution rule 5); the LP module (`src/lp/`) never sees raw ICAO codes
+- Operating-window pre-filtering must run before `compute_demand()` — flights before 05:00 or after 22:00 Helsinki time raise `ValueError` if passed to the LP
+- T030 consolidates all remaining `__init__.py` exports (schedule_shifts, identify_bottlenecks, comparison_report) — do in one pass after US4/US9/Polish are complete
 - Commit after each phase checkpoint
-- Run `pytest tests/lp/` from repo root after every phase
+- Run `pytest tests/lp/ tests/utils/` from repo root after every phase
