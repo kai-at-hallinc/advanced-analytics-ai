@@ -3,9 +3,10 @@ import random
 import pytest
 
 from src.neural_nets.perception4e import *
-from PIL import Image
 import numpy as np
 import os
+
+Image = pytest.importorskip("PIL.Image")
 
 random.seed("aima-python")
 
@@ -62,6 +63,7 @@ def test_gen_discs():
 
 
 def test_simple_convnet():
+    pytest.importorskip("keras")
     train, val, test = load_MINST(1000, 100, 10)
     model = simple_convnet()
     model.fit(train[0], train[1], validation_data=(val[0], val[1]), epochs=5, verbose=2, batch_size=32)

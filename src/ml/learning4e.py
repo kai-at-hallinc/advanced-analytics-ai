@@ -4,11 +4,19 @@ import copy
 from collections import defaultdict
 from statistics import stdev
 
-from qpsolvers import solve_qp
-
 from ..neural_nets.deep_learning4e import Sigmoid
 from ..probability.probabilistic_learning import NaiveBayesLearner
 from ..shared.utils4e import *
+
+
+def _solve_qp(*args, **kwargs):
+    try:
+        from qpsolvers import solve_qp
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "qpsolvers is required for SVC-based learners. Install advanced-analytics-ai[ml]."
+        ) from exc
+    return solve_qp(*args, **kwargs)
 
 
 class DataSet:
@@ -551,8 +559,8 @@ class SVC:
         ub = np.ones(m) * self.C  # upper bounds
         A = y.astype(np.float64)  # equality matrix
         b = np.zeros(1)  # equality vector
-        self.alphas = solve_qp(P, q, A=A, b=b, lb=lb, ub=ub, solver='cvxopt',
-                               sym_proj=True, verbose=self.verbose)
+        self.alphas = _solve_qp(P, q, A=A, b=b, lb=lb, ub=ub, solver='cvxopt',
+                                sym_proj=True, verbose=self.verbose)
 
     def predict_score(self, X):
         """
@@ -622,8 +630,8 @@ class SVR:
         ub = np.ones(2 * m) * self.C  # upper bounds
         A = np.hstack((np.ones(m), -np.ones(m)))  # equality matrix
         b = np.zeros(1)  # equality vector
-        alphas = solve_qp(P, q, A=A, b=b, lb=lb, ub=ub, solver='cvxopt',
-                          sym_proj=True, verbose=self.verbose)
+        alphas = _solve_qp(P, q, A=A, b=b, lb=lb, ub=ub, solver='cvxopt',
+                           sym_proj=True, verbose=self.verbose)
         self.alphas_p = alphas[:m]
         self.alphas_n = alphas[m:]
 

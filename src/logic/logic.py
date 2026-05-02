@@ -38,11 +38,19 @@ import itertools
 import random
 from collections import defaultdict, Counter
 
-import networkx as nx
-
 from ..csp.csp import parse_neighbors, UniversalDict
 from ..search.search import astar_search, PlanRoute
 from ..shared.utils import remove_all, unique, first, probability, isnumber, issequence, Expr, expr, subexpressions, extend
+
+
+def _require_networkx():
+    try:
+        import networkx as nx
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "networkx is required for CDCL graph analysis. Install the optional visualization dependencies."
+        ) from exc
+    return nx
 
 
 class KB:
@@ -854,6 +862,7 @@ def cdcl_satisfiable(s, vsids_decay=0.95, restart_strategy=no_restart):
     >>> cdcl_satisfiable(A |'<=>'| B) == {A: True, B: True}
     True
     """
+    nx = _require_networkx()
     clauses = TwoWLClauseDatabase(conjuncts(to_cnf(s)))
     symbols = prop_symbols(s)
     scores = Counter()
@@ -958,6 +967,7 @@ def unit_propagation(clauses, symbols, model, G, dl):
 
 
 def conflict_analysis(G, dl):
+    nx = _require_networkx()
     conflict_clause = next(G[p]['K']['antecedent'] for p in G.pred['K'])
     P = next(node for node in G.nodes() - 'K' if G.nodes[node]['dl'] == dl and G.in_degree(node) == 0)
     first_uip = nx.immediate_dominators(G, P)['K']

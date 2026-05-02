@@ -31,7 +31,6 @@ EnvCanvas ## Canvas to display the environment of an EnvGUI
 
 from .utils_aima import distance_squared, turn_heading
 from statistics import mean
-from ipythonblocks import BlockGrid
 from IPython.display import HTML, display, clear_output
 from time import sleep
 
@@ -39,6 +38,16 @@ import random
 import copy
 import collections
 import numbers
+
+
+def _require_blockgrid():
+    try:
+        from ipythonblocks import BlockGrid
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "ipythonblocks is required for GraphicEnvironment. Install the notebook dependencies."
+        ) from exc
+    return BlockGrid
 
 
 # ______________________________________________________________________________
@@ -619,6 +628,7 @@ class GraphicEnvironment(XYEnvironment):
         """Define all the usual XYEnvironment characteristics,
         but initialise a BlockGrid for GUI too."""
         super().__init__(width, height)
+        BlockGrid = _require_blockgrid()
         self.grid = BlockGrid(width, height, fill=(200, 200, 200))
         if display:
             self.grid.show()

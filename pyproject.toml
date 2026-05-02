@@ -12,13 +12,15 @@ dependencies = [
     "scipy",
     "ipywidgets",
     "jupyter",
+    "sortedcontainers",
+    "tzdata",
 ]
 
 [project.optional-dependencies]
 ml = ["qpsolvers"]
-deep_learning = ["keras", "tensorflow"]
+deep_learning = ["keras", "tensorflow", "opencv-python-headless", "Pillow", "matplotlib"]
 mcp = ["mcp"]
-dev = ["pytest", "pytest-cov"]
+dev = ["pytest", "pytest-cov", "Pillow"]
 lp = ["ortools"]
 
 [tool.setuptools.packages.find]

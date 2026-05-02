@@ -1,8 +1,10 @@
 import pytest
-from keras.datasets import imdb
 
 from src.neural_nets.deep_learning4e import *
 from src.ml.learning4e import DataSet, grade_learner, err_ratio
+
+keras = pytest.importorskip("keras")
+imdb = keras.datasets.imdb
 
 random.seed("aima-python")
 

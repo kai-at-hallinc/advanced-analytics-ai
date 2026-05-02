@@ -2,6 +2,13 @@ numpy
 scipy
 ipywidgets
 jupyter
+sortedcontainers
+tzdata
+networkx
+ipythonblocks
+Pillow
+matplotlib
+opencv-python-headless
 qpsolvers
 keras
 tensorflow

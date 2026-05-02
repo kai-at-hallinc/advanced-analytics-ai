@@ -4,12 +4,21 @@ import random
 import statistics
 
 import numpy as np
-from keras import Sequential, optimizers
-from keras.layers import Embedding, SimpleRNN, Dense
-from keras.preprocessing import sequence
 
 from ..shared.utils4e import (conv1D, gaussian_kernel, element_wise_product, vector_add, random_weights,
-                     scalar_vector_product, map_vector, mean_squared_error_loss)
+                      scalar_vector_product, map_vector, mean_squared_error_loss)
+
+
+def _require_keras():
+    try:
+        from keras import Sequential, optimizers
+        from keras.layers import Embedding, SimpleRNN, Dense
+        from keras.preprocessing import sequence
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "Keras is required for deep learning helpers. Install advanced-analytics-ai[deep_learning]."
+        ) from exc
+    return Sequential, optimizers, Embedding, SimpleRNN, Dense, sequence
 
 
 class Node:
@@ -548,6 +557,7 @@ def keras_dataset_loader(dataset, max_length=500):
     :param dataset: keras data set type
     :param max_length: max length of each input sequence
     """
+    *_, sequence = _require_keras()
     # init dataset
     (X_train, y_train), (X_val, y_val) = dataset
     if max_length > 0:
@@ -567,10 +577,9 @@ def SimpleRNNLearner(train_data, val_data, epochs=2, verbose=False):
     :param verbose: verbosity mode
     :return: a keras model
     """
-
+    Sequential, _, Embedding, SimpleRNN, Dense, _ = _require_keras()
     total_inputs = 5000
     input_length = 500
-
     # init data
     X_train, y_train = train_data
     X_val, y_val = val_data
@@ -597,6 +606,7 @@ def AutoencoderLearner(inputs, encoding_size, epochs=200, verbose=False):
     :param verbose: verbosity mode
     :return: a keras model
     """
+    Sequential, optimizers, _, _, Dense, _ = _require_keras()
 
     # init data
     input_size = len(inputs[0])

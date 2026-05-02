@@ -57,6 +57,7 @@ def test_decision_tree_learner():
 
 
 def test_svc():
+    pytest.importorskip("qpsolvers")
     iris = DataSet(name='iris')
     classes = ['setosa', 'versicolor', 'virginica']
     iris.classes_to_numbers(classes)

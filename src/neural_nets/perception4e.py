@@ -1,15 +1,32 @@
 """Perception (Chapter 24)"""
 
-import cv2
-import keras
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal
-from keras.datasets import mnist
-from keras.layers import Dense, Activation, Flatten, InputLayer, Conv2D, MaxPooling2D
-from keras.models import Sequential
 
 from ..shared.utils4e import gaussian_kernel_2D
+
+
+def _require_cv2():
+    try:
+        import cv2
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "OpenCV is required for perception image helpers. Install advanced-analytics-ai[deep_learning]."
+        ) from exc
+    return cv2
+
+
+def _require_keras():
+    try:
+        import keras
+        from keras.datasets import mnist
+        from keras.layers import Dense, Activation, Flatten, InputLayer, Conv2D, MaxPooling2D
+        from keras.models import Sequential
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "Keras is required for perception learners. Install advanced-analytics-ai[deep_learning]."
+        ) from exc
+    return keras, mnist, Dense, Activation, Flatten, InputLayer, Conv2D, MaxPooling2D, Sequential
 
 
 # ____________________________________________________
@@ -72,6 +89,8 @@ def laplacian_edge_detector(image):
 
 def show_edges(edges):
     """ helper function to show edges picture"""
+    import matplotlib.pyplot as plt
+
     plt.imshow(edges, cmap='gray', vmin=0, vmax=255)
     plt.axis('off')
     plt.show()
@@ -161,6 +180,7 @@ def group_contour_detection(image, cluster_num=2):
     :param image: an image in numpy ndarray type
     :param cluster_num: number of clusters in k-means
     """
+    cv2 = _require_cv2()
     img = image
     Z = np.float32(img)
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
@@ -299,6 +319,7 @@ def gen_discs(init_scale, scales=1):
 
 def load_MINST(train_size, val_size, test_size):
     """Load MINST dataset from keras"""
+    keras, mnist, *_ = _require_keras()
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
     total_size = len(x_train)
     if train_size + val_size > total_size:
@@ -323,6 +344,7 @@ def simple_convnet(size=3, num_classes=10):
     :param num_classes: number of output classes
     :return a convolution network in keras model type
     """
+    _, _, Dense, Activation, Flatten, InputLayer, Conv2D, MaxPooling2D, Sequential = _require_keras()
     model = Sequential()
     # add input layer for images of size (28, 28)
     model.add(InputLayer(input_shape=(1, 28, 28)))
@@ -363,6 +385,7 @@ def selective_search(image):
     :param image: str, the path of image or image in ndarray type with 3 channels
     :return list of bounding boxes, each element is in form of [x_min, y_min, x_max, y_max]
     """
+    cv2 = _require_cv2()
     if not image:
         im = cv2.imread("./images/stapler1-test.png")
     elif isinstance(image, str):
