@@ -97,9 +97,9 @@
 
 **Independent Test**: Pass a demand curve of [5, 5, 5, ..., 5] across 18 slots with shift_length=8. Confirm total workers < 18 × 5 ÷ 8 = 11.25 (naive ceiling), coverage_satisfied=True, and all shifts in shift_starts_rounded are integers ≥ 0.
 
-- [ ] T012 [US4] Write `tests/lp/test_scheduling.py` for US4 — total workers < naive peak-staffing total (SC-002); all coverage constraints met post-rounding (SC-006); coverage_satisfied=True; coverage_shortfalls empty; raises `ValueError` when demand.feasible=False
-- [ ] T013 [US4] Implement `schedule_shifts()` in `src/lp/scheduling.py` — build GLOP LP (`pywraplp.Solver.CreateSolver('GLOP')`); add shift-start variables; add coverage constraints per operating hour; solve; apply `math.ceil` to each `x_t`; re-verify all coverage constraints on rounded values; return `ShiftSchedule`
-- [ ] T014 [US4] Update `src/lp/__init__.py` — export `schedule_shifts`, `ShiftConfig`, `ShiftSchedule`
+- [X] T012 [US4] Write `tests/lp/test_scheduling.py` for US4 — total workers < naive peak-staffing total (SC-002); all coverage constraints met post-rounding (SC-006); coverage_satisfied=True; coverage_shortfalls empty; raises `ValueError` when demand.feasible=False
+- [X] T013 [US4] Implement `schedule_shifts()` in `src/lp/scheduling.py` — build GLOP LP (`pywraplp.Solver.CreateSolver('GLOP')`); add shift-start variables; add coverage constraints per operating hour; solve; apply `math.ceil` to each `x_t`; re-verify all coverage constraints on rounded values; return `ShiftSchedule`
+- [X] T014 [US4] Update `src/lp/__init__.py` — export `schedule_shifts`, `ShiftConfig`, `ShiftSchedule`
 
 **Checkpoint**: `schedule_shifts()` produces a minimum-cost integer shift plan — US4 fully functional.
 
@@ -249,9 +249,9 @@ Merge compute_demand() extensions from US3, US6, US8 carefully — all modify th
 
 ### Current Status (as of 2026-05-02)
 
-Completed phases: **1, 1b, 2, 3, 4, 5** (US1 + US2 + US3 fully done; US6 implementation done, tests partial; US7 tests done; `load_efhk()` extended with `use_actual_times` parameter)
+Completed phases: **1, 1b, 2, 3, 4, 5, 6** (US1 + US2 + US3 + US4 fully done; US6 implementation done, tests partial; US7 tests done; `load_efhk()` extended with `use_actual_times` parameter)
 
-Next up: **US4 (Phase 6)** — `schedule_shifts()` LP (T012, T013, T014)
+Next up: **US5 (Phase 7)** — headcount accuracy tests (T015, T016); **US9 (Phase 11)** can also begin in parallel
 
 ### Incremental Delivery
 

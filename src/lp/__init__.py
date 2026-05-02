@@ -27,6 +27,7 @@ from .types import (
     DEFAULT_STAFFING_STANDARDS,
 )
 from .demand import compute_demand
+from .scheduling import schedule_shifts
 
 __all__ = [
     "AircraftType",
@@ -34,6 +35,10 @@ __all__ = [
     "FlightMovementInput",
     "DemandConfig",
     "DemandResult",
+    "ShiftConfig",
+    "ShiftSchedule",
     "DEFAULT_DEMAND_CONFIG",
+    "DEFAULT_SHIFT_CONFIG",
     "compute_demand",
+    "schedule_shifts",
 ]
