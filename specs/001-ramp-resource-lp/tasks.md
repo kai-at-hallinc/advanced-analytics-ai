@@ -111,8 +111,8 @@
 
 **Independent Test**: Sum `shift_starts_rounded.values()` manually and confirm it equals `daily_headcount` on several varied demand inputs including uniform, peak-morning, and bi-modal curves.
 
-- [ ] T015 [US5] Add headcount accuracy tests to `tests/lp/test_scheduling.py` — `daily_headcount == sum(shift_starts_rounded.values())` for uniform demand; peak-morning demand; bi-modal demand; zero-demand edge case returns headcount=0; single-slot demand
-- [ ] T016 [US5] Verify `daily_headcount` assignment in `src/lp/scheduling.py` — computed as `sum(ceil(x_t) for all t)` immediately after rounding; confirm SC-004 invariant holds across all test inputs
+- [X] T015 [US5] Add headcount accuracy tests to `tests/lp/test_scheduling.py` — `daily_headcount == sum(shift_starts_rounded.values())` for uniform demand; peak-morning demand; bi-modal demand; zero-demand edge case returns headcount=0; single-slot demand
+- [X] T016 [US5] Verify `daily_headcount` assignment in `src/lp/scheduling.py` — computed as `sum(ceil(x_t) for all t)` immediately after rounding; confirm SC-004 invariant holds across all test inputs
 
 **Checkpoint**: Headcount output is payroll-ready with no downstream deduplication — US5 fully functional.
 
@@ -249,9 +249,9 @@ Merge compute_demand() extensions from US3, US6, US8 carefully — all modify th
 
 ### Current Status (as of 2026-05-02)
 
-Completed phases: **1, 1b, 2, 3, 4, 5, 6** (US1 + US2 + US3 + US4 fully done; US6 implementation done, tests partial; US7 tests done; `load_efhk()` extended with `use_actual_times` parameter)
+Completed phases: **1, 1b, 2, 3, 4, 5, 6, 7** (US1 + US2 + US3 + US4 fully done; US6 implementation done, tests partial; US7 tests done; `load_efhk()` extended with `use_actual_times` parameter)
 
-Next up: **US5 (Phase 7)** — headcount accuracy tests (T015, T016); **US9 (Phase 11)** can also begin in parallel
+Next up: **US8 (Phase 10)** — on-time classification (T021, T022); **US9 (Phase 11)** — bottleneck analysis (T023-T025)
 
 ### Incremental Delivery
 

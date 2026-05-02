@@ -1,6 +1,6 @@
 """
 Tests for schedule_shifts() — US4: Minimum Shift Schedule.
-Phase 6 (T012).
+Phase 6 (T012) / Phase 7 (T015).
 """
 import pytest
 
@@ -145,6 +145,54 @@ def test_custom_shift_length_4():
     assert schedule.coverage_satisfied is True
     assert schedule.daily_headcount < 90
 
+
+# ---------------------------------------------------------------------------
+# US5: Accurate Daily Headcount (SC-004 invariant) — T015
+# daily_headcount == sum(shift_starts_rounded.values()) across varied profiles
+# ---------------------------------------------------------------------------
+
+def test_headcount_invariant_uniform_demand():
+    demand = _demand([5] * 18)
+    schedule = schedule_shifts(demand)
+    assert schedule.daily_headcount == sum(schedule.shift_starts_rounded.values())
+
+
+def test_headcount_invariant_peak_morning():
+    curve = [2, 4, 8, 12, 10, 8, 6, 5, 4, 3, 3, 3, 3, 3, 4, 5, 4, 2]
+    demand = _demand(curve)
+    schedule = schedule_shifts(demand)
+    assert schedule.daily_headcount == sum(schedule.shift_starts_rounded.values())
+
+
+def test_headcount_invariant_bimodal():
+    curve = [3, 8, 12, 8, 3, 2, 2, 2, 2, 2, 2, 2, 3, 8, 12, 8, 3, 2]
+    demand = _demand(curve)
+    schedule = schedule_shifts(demand)
+    assert schedule.daily_headcount == sum(schedule.shift_starts_rounded.values())
+
+
+def test_headcount_zero_demand_returns_zero():
+    # All-zero demand → no shifts needed → headcount=0
+    demand = _demand([0] * 18)
+    schedule = schedule_shifts(demand)
+    assert schedule.daily_headcount == 0
+    assert all(v == 0 for v in schedule.shift_starts_rounded.values())
+    assert schedule.coverage_satisfied is True
+
+
+def test_headcount_invariant_single_slot_demand():
+    # Only one slot has non-zero demand
+    curve = [0] * 18
+    curve[5] = 7  # demand at operating hour index 5 only
+    demand = _demand(curve)
+    schedule = schedule_shifts(demand)
+    assert schedule.daily_headcount == sum(schedule.shift_starts_rounded.values())
+    assert schedule.coverage_satisfied is True
+
+
+# ---------------------------------------------------------------------------
+# Pipeline
+# ---------------------------------------------------------------------------
 
 def test_via_compute_demand_pipeline():
     # End-to-end: compute_demand → schedule_shifts
