@@ -124,7 +124,7 @@
 
 **Independent Test**: Set `pool_size=0` and pass any non-empty schedule; confirm `feasible=False`, `infeasible_slots` contains every non-zero-demand slot, and `demand_curve` is non-empty.
 
-- [ ] T017 [US6] Add pool enforcement tests to `tests/lp/test_demand.py` — demand > pool_size at one slot → feasible=False, that slot in infeasible_slots, curve still returned; pool_size=0 with any demand → all demand slots in infeasible_slots *(note: feasible=True case already covered by existing test_feasible_true_when_demand_within_pool — add the infeasible=True cases only)*
+- [X] T017 [US6] Add pool enforcement tests to `tests/lp/test_demand.py` — demand > pool_size at one slot → feasible=False, that slot in infeasible_slots, curve still returned; pool_size=0 with any demand → all demand slots in infeasible_slots *(note: feasible=True case already covered by existing test_feasible_true_when_demand_within_pool — add the infeasible=True cases only)*
 - [X] T018 [US6] Add pool_size post-check to `compute_demand()` in `src/lp/demand.py` — after building demand_curve, scan each slot; if `r_j > pool_size` add to infeasible_slots; set feasible=False when infeasible_slots non-empty; always return full curve
 
 **Checkpoint**: Infeasibility is surfaced clearly with specific slot identification — US6 fully functional.
@@ -249,7 +249,7 @@ Merge compute_demand() extensions from US3, US6, US8 carefully — all modify th
 
 ### Current Status (as of 2026-05-02)
 
-Completed phases: **1, 1b, 2, 3, 4, 5, 6, 7** (US1 + US2 + US3 + US4 fully done; US6 implementation done, tests partial; US7 tests done; `load_efhk()` extended with `use_actual_times` parameter)
+Completed phases: **1, 1b, 2, 3, 4, 5, 6, 7, 8** (US1 + US2 + US3 + US4 fully done; US6 implementation done, tests partial; US7 tests done; `load_efhk()` extended with `use_actual_times` parameter)
 
 Next up: **US8 (Phase 10)** — on-time classification (T021, T022); **US9 (Phase 11)** — bottleneck analysis (T023-T025)
 

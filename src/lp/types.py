@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal
@@ -73,7 +74,7 @@ class DemandConfig:
         }
     )
     tolerance_minutes: int = 15
-    pool_size: int = 9999
+    pool_size: float = math.inf  # workforce ceiling; math.inf = unconstrained (default)
     operating_day_start: int = 5
     operating_day_end: int = 23
 

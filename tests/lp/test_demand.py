@@ -140,6 +140,78 @@ def test_feasible_true_when_demand_within_pool():
 
 
 # ---------------------------------------------------------------------------
+# US6: Capacity Constraint Enforcement (T017) — infeasible cases only
+# (feasible=True case covered above by test_feasible_true_when_demand_within_pool)
+# ---------------------------------------------------------------------------
+
+def test_pool_exceeded_at_one_slot_marks_infeasible():
+    # 3 narrow-body arrivals at hour 10 → demand = 3 × 3 = 9; pool_size=5 → infeasible
+    cfg = DemandConfig(pool_size=5)
+    scheduled = [FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 3})]
+    result = compute_demand(scheduled, config=cfg)
+    assert result.feasible is False
+    assert 10 in result.infeasible_slots
+    # Full demand curve is still returned
+    idx = result.operating_hours.index(10)
+    assert result.demand_curve[idx] == 9
+
+
+def test_pool_exceeded_curve_still_returned():
+    # Caller must be able to inspect magnitudes even when infeasible
+    cfg = DemandConfig(pool_size=1)
+    scheduled = [
+        FlightSlotInput(hour=8, arrival_counts={AircraftType.WIDE_BODY: 2}),
+        FlightSlotInput(hour=12, arrival_counts={AircraftType.NARROW_BODY: 1}),
+    ]
+    result = compute_demand(scheduled, config=cfg)
+    assert result.feasible is False
+    assert len(result.demand_curve) == len(result.operating_hours)
+    assert all(v >= 0 for v in result.demand_curve)
+
+
+def test_only_violating_slots_in_infeasible_list():
+    # hour 10: 3 × 5 = 15 > pool=10 → infeasible
+    # hour 14: 1 × 3 = 3 ≤ pool=10 → feasible
+    cfg = DemandConfig(pool_size=10)
+    scheduled = [
+        FlightSlotInput(hour=10, arrival_counts={AircraftType.WIDE_BODY: 3}),
+        FlightSlotInput(hour=14, arrival_counts={AircraftType.NARROW_BODY: 1}),
+    ]
+    result = compute_demand(scheduled, config=cfg)
+    assert result.feasible is False
+    assert 10 in result.infeasible_slots
+    assert 14 not in result.infeasible_slots
+
+
+def test_pool_size_zero_all_nonzero_slots_infeasible():
+    # pool_size=0 means every slot with any demand is infeasible
+    cfg = DemandConfig(pool_size=0)
+    scheduled = [
+        FlightSlotInput(hour=8, arrival_counts={AircraftType.NARROW_BODY: 1}),
+        FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 1}),
+    ]
+    result = compute_demand(scheduled, config=cfg)
+    assert result.feasible is False
+    # Every hour with non-zero demand must be in infeasible_slots
+    for i, h in enumerate(result.operating_hours):
+        if result.demand_curve[i] > 0:
+            assert h in result.infeasible_slots
+
+
+def test_default_pool_size_is_unconstrained():
+    # Default config (pool_size=math.inf) never triggers infeasibility
+    import math
+    scheduled = [
+        FlightSlotInput(hour=h, arrival_counts={AircraftType.CARGO: 99})
+        for h in range(5, 23)
+    ]
+    result = compute_demand(scheduled)
+    assert result.feasible is True
+    assert result.infeasible_slots == []
+    assert DemandConfig().pool_size == math.inf
+
+
+# ---------------------------------------------------------------------------
 # US2: Independent Departure Demand (T026)
 # ---------------------------------------------------------------------------
 

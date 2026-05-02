@@ -12,9 +12,7 @@ on the rounded values (SC-006).
 from __future__ import annotations
 
 import math
-
 from ortools.linear_solver import pywraplp
-
 from .types import DEFAULT_SHIFT_CONFIG, DemandResult, ShiftConfig, ShiftSchedule
 
 
@@ -38,6 +36,7 @@ def schedule_shifts(
     d = demand.demand_curve
     L = config.shift_length
 
+    # GLOP solver instance
     solver = pywraplp.Solver.CreateSolver("GLOP")
     if solver is None:
         raise RuntimeError("Failed to create GLOP solver instance")
