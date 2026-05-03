@@ -10,7 +10,7 @@ FlightCounts = dict[int, dict[AircraftType, float]]
 
 def _resolve_flight_counts(
     scheduled: list[FlightSlotInput],
-    predicted: list[FlightSlotInput] | None,
+    tau: list[FlightSlotInput] | None,
     arrival_delay_flags: dict[AircraftType, bool] | None,
     departure_delay_flags: dict[AircraftType, bool] | None,
     operating_day_end: int,
@@ -19,14 +19,14 @@ def _resolve_flight_counts(
 
     Applies input mode precedence for each direction independently:
 
-    - ``predicted`` provided: its arrival/departure counts are used directly — delay flags ignored.
-    - ``predicted`` is None + delay flag set for a type: 20/80 split — 20% of count stays at the
+    - ``tau`` provided: its arrival/departure counts are used directly — delay flags ignored.
+    - ``tau`` is None + delay flag set for a type: 20/80 split — 20% of count stays at the
       original hour, 80% moves to ``hour + 1`` (capped at ``operating_day_end``).
-    - ``predicted`` is None + no delay flag: scheduled counts used unchanged.
+    - ``tau`` is None + no delay flag: scheduled counts used unchanged.
 
     Args:
         scheduled: baseline slot counts for each hour.
-        predicted: optional slot-level override; takes full precedence over delay flags.
+        tau: optional slot-level override (τ); takes full precedence over delay flags.
         arrival_delay_flags: per-type bool; True applies the 20/80 heuristic to arrivals.
         departure_delay_flags: per-type bool; True applies the 20/80 heuristic to departures.
         operating_day_end: exclusive upper hour bound; prevents spilling into the next day.
@@ -37,8 +37,8 @@ def _resolve_flight_counts(
     arr_counts: FlightCounts = defaultdict(lambda: defaultdict(float))
     dep_counts: FlightCounts = defaultdict(lambda: defaultdict(float))
 
-    if predicted is not None:
-        for slot in predicted:
+    if tau is not None:
+        for slot in tau:
             for ac_type, c in slot.arrival_counts.items():
                 arr_counts[slot.hour][ac_type] = float(c)
             for ac_type, c in slot.departure_counts.items():
@@ -74,19 +74,19 @@ def _resolve_flight_counts(
     return arr_counts, dep_counts
 
 
-def _aggregate_predicted_movements(
+def _aggregate_tau_movements(
     movements: list[FlightMovementInput],
     tolerance_minutes: int,
 ) -> tuple[FlightCounts, FlightCounts]:
     """Aggregate per-flight movements into hourly counts using tolerance-window classification.
 
     For each movement, the effective slot is chosen as:
-    - ``predicted_minutes`` is None → ``floor(scheduled_minutes / 60)`` (treated as on-time).
-    - ``|predicted_minutes - scheduled_minutes| <= tolerance_minutes`` → scheduled slot (on-time).
-    - Otherwise → ``floor(predicted_minutes / 60)`` (reclassified; early arrivals keep full count).
+    - ``tau_minutes`` is None → ``floor(scheduled_minutes / 60)`` (treated as on-time).
+    - ``|tau_minutes - scheduled_minutes| <= tolerance_minutes`` → scheduled slot (on-time).
+    - Otherwise → ``floor(tau_minutes / 60)`` (reclassified; early arrivals keep full count).
 
     Args:
-        movements: list of individual flight records with scheduled and predicted minute timestamps.
+        movements: list of individual flight records with scheduled and τ (tau) minute timestamps.
         tolerance_minutes: on-time window half-width; flights within ±this value are not reclassified.
 
     Returns:
@@ -97,9 +97,9 @@ def _aggregate_predicted_movements(
 
     for m in movements:
         sched_slot = m.scheduled_minutes // 60
-        if m.predicted_minutes is not None:
-            delta = abs(m.predicted_minutes - m.scheduled_minutes)
-            effective_slot = sched_slot if delta <= tolerance_minutes else m.predicted_minutes // 60
+        if m.tau_minutes is not None:
+            delta = abs(m.tau_minutes - m.scheduled_minutes)
+            effective_slot = sched_slot if delta <= tolerance_minutes else m.tau_minutes // 60
         else:
             effective_slot = sched_slot
 

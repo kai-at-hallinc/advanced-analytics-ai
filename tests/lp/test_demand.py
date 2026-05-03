@@ -430,13 +430,13 @@ def test_departure_delay_flag_does_not_affect_arrival_counts():
     assert result.departure_demand_curve[idx_11] == 12
 
 
-def test_predicted_overrides_arrival_delay_flag():
+def test_tau_overrides_arrival_delay_flag():
     # predicted provided with 4 NB arrivals → delay heuristic on arrivals must not apply
     scheduled = [FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 5})]
-    predicted = [FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 4})]
+    tau = [FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 4})]
     result = compute_demand(
         scheduled,
-        predicted=predicted,
+        tau=tau,
         arrival_delay_flags={AircraftType.NARROW_BODY: True},
     )
     idx_10 = result.operating_hours.index(10)
@@ -446,13 +446,13 @@ def test_predicted_overrides_arrival_delay_flag():
     assert result.arrival_demand_curve[idx_11] == 0
 
 
-def test_predicted_overrides_departure_delay_flag():
+def test_tau_overrides_departure_delay_flag():
     # predicted provided with 3 WB departures → delay heuristic on departures must not apply
     scheduled = [FlightSlotInput(hour=14, departure_counts={AircraftType.WIDE_BODY: 5})]
-    predicted = [FlightSlotInput(hour=14, departure_counts={AircraftType.WIDE_BODY: 3})]
+    tau = [FlightSlotInput(hour=14, departure_counts={AircraftType.WIDE_BODY: 3})]
     result = compute_demand(
         scheduled,
-        predicted=predicted,
+        tau=tau,
         departure_delay_flags={AircraftType.WIDE_BODY: True},
     )
     idx_13 = result.operating_hours.index(13)
@@ -465,7 +465,7 @@ def test_predicted_overrides_departure_delay_flag():
 
 
 # ---------------------------------------------------------------------------
-# US8: On-Time Window Classification (T021) — predicted_movements
+# US8: On-Time Window Classification (T021) — tau_movements
 # ---------------------------------------------------------------------------
 
 
@@ -477,16 +477,16 @@ def test_on_time_movement_demand_at_scheduled_slot():
             aircraft_type=AircraftType.NARROW_BODY,
             op_type="A",
             scheduled_minutes=9 * 60,       # 540
-            predicted_minutes=9 * 60 - 10,  # 530 = 08:50
+            tau_minutes=9 * 60 - 10,  # 530 = 08:50
         )
     ]
     scheduled = [FlightSlotInput(hour=9, arrival_counts={AircraftType.NARROW_BODY: 1})]
-    result = compute_demand(scheduled, predicted_movements=movements)
+    result = compute_demand(scheduled, tau_movements=movements)
     idx_9 = result.operating_hours.index(9)
     assert result.arrival_demand_curve[idx_9] == 3  # 1 × 3 at scheduled slot 9
 
 
-def test_late_movement_demand_at_predicted_slot():
+def test_late_movement_demand_at_tau_slot():
     # scheduled 09:50 (590 min), predicted 10:20 (620 min) — 30 min late, >15 min → reclassified
     # effective slot = floor(620/60) = 10
     movements = [
@@ -494,18 +494,18 @@ def test_late_movement_demand_at_predicted_slot():
             aircraft_type=AircraftType.NARROW_BODY,
             op_type="A",
             scheduled_minutes=9 * 60 + 50,   # 590 = 09:50
-            predicted_minutes=10 * 60 + 20,   # 620 = 10:20
+            tau_minutes=10 * 60 + 20,   # 620 = 10:20
         )
     ]
     scheduled = [FlightSlotInput(hour=9, arrival_counts={AircraftType.NARROW_BODY: 1})]
-    result = compute_demand(scheduled, predicted_movements=movements)
+    result = compute_demand(scheduled, tau_movements=movements)
     idx_9 = result.operating_hours.index(9)
     idx_10 = result.operating_hours.index(10)
     assert result.arrival_demand_curve[idx_9] == 0   # moved away from scheduled slot
     assert result.arrival_demand_curve[idx_10] == 3  # demand at predicted slot
 
 
-def test_early_movement_demand_at_predicted_slot_not_reduced():
+def test_early_movement_demand_at_tau_slot_not_reduced():
     # FR-010: early arrival at predicted slot; demand not reduced below standard
     # scheduled 09:00 (540 min), predicted 08:40 (520 min) — 20 min early, >15 min → reclassified
     # effective slot = floor(520/60) = 8
@@ -514,11 +514,11 @@ def test_early_movement_demand_at_predicted_slot_not_reduced():
             aircraft_type=AircraftType.NARROW_BODY,
             op_type="A",
             scheduled_minutes=9 * 60,        # 540 = 09:00
-            predicted_minutes=8 * 60 + 40,   # 520 = 08:40
+            tau_minutes=8 * 60 + 40,   # 520 = 08:40
         )
     ]
     scheduled = [FlightSlotInput(hour=9, arrival_counts={AircraftType.NARROW_BODY: 1})]
-    result = compute_demand(scheduled, predicted_movements=movements)
+    result = compute_demand(scheduled, tau_movements=movements)
     idx_8 = result.operating_hours.index(8)
     idx_9 = result.operating_hours.index(9)
     assert result.arrival_demand_curve[idx_9] == 0   # moved from scheduled slot
@@ -533,19 +533,19 @@ def test_custom_tolerance_reclassifies_12min_late_flight():
             aircraft_type=AircraftType.NARROW_BODY,
             op_type="A",
             scheduled_minutes=9 * 60 + 50,  # 590 = 09:50
-            predicted_minutes=10 * 60 + 2,  # 602 = 10:02
+            tau_minutes=10 * 60 + 2,  # 602 = 10:02
         )
     ]
     scheduled = [FlightSlotInput(hour=9, arrival_counts={AircraftType.NARROW_BODY: 1})]
     cfg = DemandConfig(tolerance_minutes=10)
-    result = compute_demand(scheduled, predicted_movements=movements, config=cfg)
+    result = compute_demand(scheduled, tau_movements=movements, config=cfg)
     idx_9 = result.operating_hours.index(9)
     idx_10 = result.operating_hours.index(10)
     assert result.arrival_demand_curve[idx_9] == 0
     assert result.arrival_demand_curve[idx_10] == 3
 
 
-def test_departure_outside_window_anchored_at_predicted_slot():
+def test_departure_outside_window_anchored_at_tau_slot():
     # WB departure scheduled 13:50 (830 min), predicted 15:10 (910 min) — 80 min late → reclassified
     # effective slot = floor(910/60) = 15; WB backward window=2 → demand at slots 14, 15
     movements = [
@@ -553,22 +553,22 @@ def test_departure_outside_window_anchored_at_predicted_slot():
             aircraft_type=AircraftType.WIDE_BODY,
             op_type="D",
             scheduled_minutes=13 * 60 + 50,  # 830 = 13:50
-            predicted_minutes=15 * 60 + 10,  # 910 = 15:10
+            tau_minutes=15 * 60 + 10,  # 910 = 15:10
         )
     ]
     scheduled = [FlightSlotInput(hour=13, departure_counts={AircraftType.WIDE_BODY: 1})]
-    result = compute_demand(scheduled, predicted_movements=movements)
+    result = compute_demand(scheduled, tau_movements=movements)
     idx_14 = result.operating_hours.index(14)
     idx_15 = result.operating_hours.index(15)
     assert result.departure_demand_curve[idx_14] == 5  # backward window from reclassified slot 15
     assert result.departure_demand_curve[idx_15] == 5
 
 
-def test_slot_level_predicted_no_reclassification():
-    # Slot-level predicted (no predicted_movements) → no tolerance reclassification; used as-is
+def test_slot_level_tau_no_reclassification():
+    # Slot-level predicted (no tau_movements) → no tolerance reclassification; used as-is
     scheduled = [FlightSlotInput(hour=9, arrival_counts={AircraftType.NARROW_BODY: 1})]
-    predicted = [FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 1})]
-    result = compute_demand(scheduled, predicted=predicted)
+    tau = [FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 1})]
+    result = compute_demand(scheduled, tau=tau)
     idx_9 = result.operating_hours.index(9)
     idx_10 = result.operating_hours.index(10)
     assert result.arrival_demand_curve[idx_9] == 0   # predicted slot-level takes effect directly

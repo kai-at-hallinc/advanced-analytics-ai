@@ -110,19 +110,19 @@ def test_flight_movement_input_valid_arrival():
         aircraft_type=AircraftType.WIDE_BODY,
         op_type="A",
         scheduled_minutes=600,
-        predicted_minutes=615,
+        tau_minutes=615,
     )
     assert m.op_type == "A"
-    assert m.predicted_minutes == 615
+    assert m.tau_minutes == 615
 
 
-def test_flight_movement_input_valid_departure_no_predicted():
+def test_flight_movement_input_valid_departure_no_tau():
     m = FlightMovementInput(
         aircraft_type=AircraftType.CARGO,
         op_type="D",
         scheduled_minutes=720,
     )
-    assert m.predicted_minutes is None
+    assert m.tau_minutes is None
 
 
 def test_demand_result_curve_length_invariant():
@@ -178,25 +178,25 @@ def test_comparison_report_list_length_invariants():
     report = ComparisonReport(
         hours=hours,
         scheduled_arrival_demand=zeros,
-        predicted_arrival_demand=zeros,
+        tau_arrival_demand=zeros,
         arrival_gap_absolute=zeros,
         arrival_gap_pct_total=0.0,
         scheduled_departure_demand=zeros,
-        predicted_departure_demand=zeros,
+        tau_departure_demand=zeros,
         departure_gap_absolute=zeros,
         departure_gap_pct_total=0.0,
         total_scheduled_demand=zeros,
-        total_predicted_demand=zeros,
+        total_tau_demand=zeros,
     )
     for attr in (
         "scheduled_arrival_demand",
-        "predicted_arrival_demand",
+        "tau_arrival_demand",
         "arrival_gap_absolute",
         "scheduled_departure_demand",
-        "predicted_departure_demand",
+        "tau_departure_demand",
         "departure_gap_absolute",
         "total_scheduled_demand",
-        "total_predicted_demand",
+        "total_tau_demand",
     ):
         assert len(getattr(report, attr)) == len(report.hours)
 

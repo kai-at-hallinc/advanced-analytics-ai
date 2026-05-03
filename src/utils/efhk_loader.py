@@ -74,8 +74,8 @@ def load_efhk(
     path: str,
     operating_day_start: int = 5,
     operating_day_end: int = 23,
-    extract_predicted: bool = True,
-    use_predicted_times: bool = False,
+    extract_tau: bool = True,
+    use_tau_times: bool = False,
 ) -> tuple[list[FlightSlotInput], list[FlightMovementInput] | None]:
     """Load a Finavia EFHK CSV and return scheduled slots and optional per-flight movements.
 
@@ -92,23 +92,23 @@ def load_efhk(
         First operating hour in Helsinki local time (inclusive). Default 5.
     operating_day_end:
         Last operating hour in Helsinki local time (exclusive). Default 23.
-    extract_predicted:
+    extract_tau:
         When ``True`` (default), build ``FlightMovementInput`` records from the
-        ``actual_arrival_time`` / ``actual_departure_time`` columns (predicted
+        ``actual_arrival_time`` / ``actual_departure_time`` columns (tau
         times). Rows where the column is empty are treated as on-time
-        (``predicted_minutes=None``). When ``False``, the second return value is
+        (``tau_minutes=None``). When ``False``, the second return value is
         ``None``.
-    use_predicted_times:
-        When ``True``, aggregate ``FlightSlotInput`` slots by predicted arrival/
-        departure time instead of scheduled time. Rows with a null predicted time
+    use_tau_times:
+        When ``True``, aggregate ``FlightSlotInput`` slots by tau arrival/
+        departure time instead of scheduled time. Rows with a null tau time
         fall back to scheduled time for slot assignment. Useful for building
-        the ``predicted`` argument to ``compute_demand()``. Default ``False``.
+        the ``tau`` argument to ``compute_demand()``. Default ``False``.
 
     Returns
     -------
     tuple[list[FlightSlotInput], list[FlightMovementInput] | None]
-        Slots aggregated by the chosen time (scheduled or predicted), and per-flight
-        movement records (only when ``extract_predicted=True``).
+        Slots aggregated by the chosen time (scheduled or tau), and per-flight
+        movement records (only when ``extract_tau=True``).
     """
     arrival_counts: dict[int, dict[AircraftType, int]] = defaultdict(lambda: defaultdict(int))
     departure_counts: dict[int, dict[AircraftType, int]] = defaultdict(lambda: defaultdict(int))
@@ -128,13 +128,13 @@ def load_efhk(
             scheduled_minutes = _utc_iso_to_helsinki_minutes(scheduled_utc)
 
             # Determine which time drives slot assignment
-            if use_predicted_times:
-                predicted_col = "actual_arrival_time" if op_type == "A" else "actual_departure_time"
-                predicted_raw_for_slot = row.get(predicted_col, "").strip()
+            if use_tau_times:
+                tau_col = "actual_arrival_time" if op_type == "A" else "actual_departure_time"
+                tau_raw_for_slot = row.get(tau_col, "").strip()
                 slot_minutes = (
-                    _utc_iso_to_helsinki_minutes(predicted_raw_for_slot)
-                    if predicted_raw_for_slot
-                    else scheduled_minutes  # fall back when predicted is null
+                    _utc_iso_to_helsinki_minutes(tau_raw_for_slot)
+                    if tau_raw_for_slot
+                    else scheduled_minutes  # fall back when tau is null
                 )
             else:
                 slot_minutes = scheduled_minutes
@@ -151,18 +151,18 @@ def load_efhk(
             else:
                 continue  # unrecognised op_type
 
-            if extract_predicted:
-                predicted_col = "actual_arrival_time" if op_type == "A" else "actual_departure_time"
-                predicted_raw = row.get(predicted_col, "").strip()
-                predicted_minutes: int | None = (
-                    _utc_iso_to_helsinki_minutes(predicted_raw) if predicted_raw else None
+            if extract_tau:
+                tau_col = "actual_arrival_time" if op_type == "A" else "actual_departure_time"
+                tau_raw = row.get(tau_col, "").strip()
+                tau_minutes: int | None = (
+                    _utc_iso_to_helsinki_minutes(tau_raw) if tau_raw else None
                 )
                 movements.append(
                     FlightMovementInput(
                         aircraft_type=ac_type,
                         op_type=op_type,
                         scheduled_minutes=scheduled_minutes,
-                        predicted_minutes=predicted_minutes,
+                        tau_minutes=tau_minutes,
                     )
                 )
 
@@ -176,4 +176,4 @@ def load_efhk(
         for h in all_hours
     ]
 
-    return slots, (movements if extract_predicted else None)
+    return slots, (movements if extract_tau else None)
