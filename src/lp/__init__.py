@@ -28,6 +28,7 @@ from .types import (
 )
 from .demand import compute_demand
 from .scheduling import schedule_shifts
+from .analysis import identify_bottlenecks
 
 __all__ = [
     "AircraftType",
@@ -37,8 +38,11 @@ __all__ = [
     "DemandResult",
     "ShiftConfig",
     "ShiftSchedule",
+    "BottleneckResult",
+    "ComparisonReport",
     "DEFAULT_DEMAND_CONFIG",
     "DEFAULT_SHIFT_CONFIG",
     "compute_demand",
     "schedule_shifts",
+    "identify_bottlenecks",
 ]

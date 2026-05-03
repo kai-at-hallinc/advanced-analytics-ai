@@ -163,9 +163,9 @@
 
 **Independent Test**: Construct a `DemandResult` and `ShiftSchedule` where hour 07:00 has workers == demand and hour 10:00 has workers > demand + 2; confirm bottleneck_hours = [7], demand_at_bottleneck = {7: demand_value}, hour 10 absent.
 
-- [ ] T023 [US9] Write `tests/lp/test_analysis.py` for US9 — hour where workers == demand flagged as bottleneck; hour where workers > demand not flagged; bottleneck labelled with clock hour and demand value; empty bottleneck list when all hours have surplus
-- [ ] T024 [US9] Implement `identify_bottlenecks()` in `src/lp/analysis.py` — compute active_workers_at_hour for each operating hour from `shift_starts_rounded` and `shift_length`; compare against `demand.demand_curve`; collect hours where active == demand; return `BottleneckResult`
-- [ ] T025 [US9] Update `src/lp/__init__.py` — export `identify_bottlenecks`, `BottleneckResult`
+- [X] T023 [US9] Write `tests/lp/test_analysis.py` for US9 — hour where workers == demand flagged as bottleneck; hour where workers > demand not flagged; bottleneck labelled with clock hour and demand value; empty bottleneck list when all hours have surplus
+- [X] T024 [US9] Implement `identify_bottlenecks()` in `src/lp/analysis.py` — compute active_workers_at_hour for each operating hour from `shift_starts_rounded` and `shift_length`; compare against `demand.demand_curve`; collect hours where active == demand; return `BottleneckResult`
+- [X] T025 [US9] Update `src/lp/__init__.py` — export `identify_bottlenecks`, `BottleneckResult`
 
 **Checkpoint**: Bottleneck hours are correctly identified and labelled — US9 fully functional.
 
