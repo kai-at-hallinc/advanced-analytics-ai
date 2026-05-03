@@ -2,7 +2,7 @@
 src.lp — Ramp Resource LP: ground-handling worker scheduling for Finavia airports.
 
 Implements a two-stage LP:
-  Stage 1 (compute_demand):  per-slot worker demand from flight schedule and actuals.
+  Stage 1 (compute_demand):  per-slot worker demand from flight schedule and predicted times.
   Stage 2 (schedule_shifts): minimum shift-starts satisfying that demand via GLOP.
   Analysis: identify_bottlenecks(), comparison_report().
 

@@ -33,8 +33,8 @@
 **Purpose**: Integration layer — EFHK CSV loader, UTC→Helsinki conversion, ICAO mapping (constitution rule 5: data-loading utilities in `src/utils/`).
 
 - [X] T035 [P] Create `src/utils/__init__.py` — re-exports `load_efhk`, `ICAO_TO_LP_CATEGORY`
-- [X] T036 [P] Implement `src/utils/efhk_loader.py` — UTC→Helsinki via `ZoneInfo("Europe/Helsinki")`; ICAO code → `AircraftType` mapping (`AT75`, `AT76`, A320/B737-family → `NARROW_BODY`; A330/A350/B77x-family → `WIDE_BODY`; `flight_type_iata=F` → `CARGO`); operating-window filter (05:00–23:00 Helsinki); aggregate to `list[FlightSlotInput]`; extract `actual_arrival_time`/`actual_departure_time` → `FlightMovementInput` by default (`extract_actuals=True`); null actual → `actual_minutes=None`; `use_actual_times=True` aggregates slots by actual time (falls back to scheduled when null)
-- [X] T037 [P] Write `tests/utils/test_efhk_loader.py` — ICAO mapping (AT76 → NARROW_BODY, A359 → WIDE_BODY, `flight_type_iata=F` overrides airframe); UTC→Helsinki conversion (2026-03-27 UTC+2); all hours within operating window; no duplicate hours; actuals extracted by default; actuals suppressed when `extract_actuals=False`; all movements have valid `op_type`; all `scheduled_minutes` in window
+- [X] T036 [P] Implement `src/utils/efhk_loader.py` — UTC→Helsinki via `ZoneInfo("Europe/Helsinki")`; ICAO code → `AircraftType` mapping (`AT75`, `AT76`, A320/B737-family → `NARROW_BODY`; A330/A350/B77x-family → `WIDE_BODY`; `flight_type_iata=F` → `CARGO`); operating-window filter (05:00–23:00 Helsinki); aggregate to `list[FlightSlotInput]`; extract `actual_arrival_time`/`actual_departure_time` CSV columns → `FlightMovementInput` by default (`extract_predicted=True`); null predicted → `predicted_minutes=None`; `use_predicted_times=True` aggregates slots by predicted time (falls back to scheduled when null)
+- [X] T037 [P] Write `tests/utils/test_efhk_loader.py` — ICAO mapping (AT76 → NARROW_BODY, A359 → WIDE_BODY, `flight_type_iata=F` overrides airframe); UTC→Helsinki conversion (2026-03-27 UTC+2); all hours within operating window; no duplicate hours; predicted extracted by default; predicted suppressed when `extract_predicted=False`; all movements have valid `op_type`; all `scheduled_minutes` in window
 
 ---
 
@@ -44,7 +44,7 @@
 
 **⚠️ CRITICAL**: No user story implementation can begin until this phase is complete.
 
-- [X] T005 Implement `src/lp/types.py` — `AircraftType` enum (NARROW_BODY, WIDE_BODY, CARGO); dataclasses `FlightSlotInput` (hour, arrival_counts, departure_counts), `FlightMovementInput` (aircraft_type, op_type: Literal['A','D'], scheduled_minutes: int, actual_minutes: int|None), `DemandConfig` (staffing_standards, arrival_window_slots, departure_staffing_standards, departure_window_slots, tolerance_minutes, pool_size, operating_day_start, operating_day_end), `DemandResult` (demand_curve, arrival_demand_curve, departure_demand_curve, feasible, infeasible_slots, operating_hours), `ShiftConfig`, `ShiftSchedule`, `BottleneckResult`, `ComparisonReport`; constants `DEFAULT_STAFFING_STANDARDS`, `DEFAULT_ARRIVAL_WINDOW_SLOTS`, `DEFAULT_DEPARTURE_STAFFING_STANDARDS`, `DEFAULT_DEPARTURE_WINDOW_SLOTS`, `DEFAULT_OPERATING_HOURS`
+- [X] T005 Implement `src/lp/types.py` — `AircraftType` enum (NARROW_BODY, WIDE_BODY, CARGO); dataclasses `FlightSlotInput` (hour, arrival_counts, departure_counts), `FlightMovementInput` (aircraft_type, op_type: Literal['A','D'], scheduled_minutes: int, predicted_minutes: int|None), `DemandConfig` (staffing_standards, arrival_window_slots, departure_staffing_standards, departure_window_slots, tolerance_minutes, pool_size, operating_day_start, operating_day_end), `DemandResult` (demand_curve, arrival_demand_curve, departure_demand_curve, feasible, infeasible_slots, operating_hours), `ShiftConfig`, `ShiftSchedule`, `BottleneckResult`, `ComparisonReport`; constants `DEFAULT_STAFFING_STANDARDS`, `DEFAULT_ARRIVAL_WINDOW_SLOTS`, `DEFAULT_DEPARTURE_STAFFING_STANDARDS`, `DEFAULT_DEPARTURE_WINDOW_SLOTS`, `DEFAULT_OPERATING_HOURS`
 - [X] T006 [P] Write `tests/lp/test_types.py` — validate `AircraftType` enum values; `DemandConfig` defaults (3/5/6, 1/2/3 slots); `FlightSlotInput` missing-type defaults to 0; `FlightMovementInput` validation (invalid op_type raises `ValueError`, out-of-range `scheduled_minutes` raises `ValueError`); `DemandResult` invariants: `len(demand_curve) == len(arrival_demand_curve) == len(departure_demand_curve) == len(operating_hours)` and `demand_curve[i] == arrival_demand_curve[i] + departure_demand_curve[i]`; `ShiftSchedule` invariant `daily_headcount == sum(shift_starts_rounded.values())`; `ComparisonReport` list-length invariants; `ValueError` raised for out-of-range hour and negative counts
 
 **Checkpoint**: All types are importable and type-checked — user story implementation can now begin.
@@ -80,12 +80,12 @@
 
 ## Phase 5: US3 — Delay-Adjusted Demand (Priority: P3)
 
-**Goal**: `compute_demand()` applies the 20/80 heuristic via `arrival_delay_flags` / `departure_delay_flags` (FR-002) independently per direction, and accepts slot-level actual counts via `actuals` as a higher-precedence override for both arrivals (FR-003) and departures (FR-015). Four-mode precedence per direction: actual_movements → actuals → arrival_delay_flags / departure_delay_flags → scheduled.
+**Goal**: `compute_demand()` applies the 20/80 heuristic via `arrival_delay_flags` / `departure_delay_flags` (FR-002) independently per direction, and accepts slot-level predicted counts via `predicted` as a higher-precedence override for both arrivals (FR-003) and departures (FR-015). Four-mode precedence per direction: predicted_movements → predicted → arrival_delay_flags / departure_delay_flags → scheduled.
 
-**Independent Test**: Mark narrow-body as delayed (`arrival_delay_flags`); confirm original arrival slot drops to 20% and actual slot receives 80%. Mark wide-body as departure-delayed (`departure_delay_flags`); confirm same split for departures independently. Then pass `actuals` directly and confirm no 20/80 split is applied for either direction.
+**Independent Test**: Mark narrow-body as delayed (`arrival_delay_flags`); confirm original arrival slot drops to 20% and predicted slot receives 80%. Mark wide-body as departure-delayed (`departure_delay_flags`); confirm same split for departures independently. Then pass `predicted` directly and confirm no 20/80 split is applied for either direction.
 
-- [X] T010 [US3] Add `arrival_delay_flags` and `departure_delay_flags` test cases to `tests/lp/test_demand.py` — arrival delayed type: 20% at original slot, 80% at actual slot; departure delayed type: same heuristic applied independently; on-time type unchanged in both directions; mixed delayed/on-time in same slot; `actuals.arrival_counts` overrides arrival delay heuristic; `actuals.departure_counts` overrides departure delay heuristic (FR-015); scheduled used unchanged when neither provided; arrival_delay_flags does not affect departure counts and vice versa
-- [X] T011 [US3] Extend `compute_demand()` in `src/lp/demand.py` — add `arrival_delay_flags` branch applying `n_ij = s_ij · (1 − 0.8·d_i)` per delayed arrival type; add `departure_delay_flags` branch applying same heuristic per delayed departure type independently; add `actuals` branch using `arrival_counts`/`departure_counts` directly per direction (FR-015 precedence for departures); enforce per-direction precedence (actual_movements → actuals → arrival_delay_flags / departure_delay_flags → scheduled)
+- [X] T010 [US3] Add `arrival_delay_flags` and `departure_delay_flags` test cases to `tests/lp/test_demand.py` — arrival delayed type: 20% at original slot, 80% at predicted slot; departure delayed type: same heuristic applied independently; on-time type unchanged in both directions; mixed delayed/on-time in same slot; `predicted.arrival_counts` overrides arrival delay heuristic; `predicted.departure_counts` overrides departure delay heuristic (FR-015); scheduled used unchanged when neither provided; arrival_delay_flags does not affect departure counts and vice versa
+- [X] T011 [US3] Extend `compute_demand()` in `src/lp/demand.py` — add `arrival_delay_flags` branch applying `n_ij = s_ij · (1 − 0.8·d_i)` per delayed arrival type; add `departure_delay_flags` branch applying same heuristic per delayed departure type independently; add `predicted` branch using `arrival_counts`/`departure_counts` directly per direction (FR-015 precedence for departures); enforce per-direction precedence (predicted_movements → predicted → arrival_delay_flags / departure_delay_flags → scheduled)
 
 **Checkpoint**: All delay modes work correctly for both directions — US3 fully functional.
 
@@ -146,12 +146,12 @@
 
 ## Phase 10: US8 — On-Time Window Classification (Priority: P8)
 
-**Goal**: Arrivals outside ±`tolerance_minutes` of their scheduled slot are reclassified to the actual slot. Early arrivals receive equal or greater demand (FR-010). Applies to both arrivals and departures (FR-011).
+**Goal**: Arrivals outside ±`tolerance_minutes` of their scheduled slot are reclassified to the predicted slot. Early arrivals receive equal or greater demand (FR-010). Applies to both arrivals and departures (FR-011).
 
-**Independent Test**: Provide a flight scheduled at 09:00 that actually arrives at 08:40 (early, outside 15-min tolerance); confirm resources appear at 08:00 slot (actual hour), not 09:00, and the count at 08:00 equals the full staffing standard (not reduced).
+**Independent Test**: Provide a flight scheduled at 09:00 that is predicted to arrive at 08:40 (early, outside 15-min tolerance); confirm resources appear at 08:00 slot (predicted hour), not 09:00, and the count at 08:00 equals the full staffing standard (not reduced).
 
-- [ ] T021 [US8] Add on-time classification tests to `tests/lp/test_demand.py` using `actual_movements: list[FlightMovementInput]` — inside window (±14 min): demand at scheduled slot; outside window late (25 min late): demand at actual slot; outside window early (20 min early): demand at actual slot, not reduced (FR-010); tolerance configurable (set to 10 min, 12-min-late flight → reclassified); departure outside window: departure window anchored at `floor(actual_minutes/60)`; slot-level `actuals` (no `actual_movements`): no reclassification applied
-- [ ] T022 [US8] Implement on-time classification in `compute_demand()` in `src/lp/demand.py` — when `actual_movements` provided, aggregate per `aircraft_type`/`op_type` after tolerance check: compute `|actual_minutes − scheduled_minutes|` per `FlightMovementInput`; if within `tolerance_minutes` assign to `floor(scheduled_minutes/60)`, else assign to `floor(actual_minutes/60)`; for early arrivals: use actual slot, demand not reduced below standard (FR-010); for departures: departure window anchored at reclassified slot; populate `arrival_demand_curve` and `departure_demand_curve` separately before summing into `demand_curve`
+- [X] T021 [US8] Add on-time classification tests to `tests/lp/test_demand.py` using `predicted_movements: list[FlightMovementInput]` — inside window (±14 min): demand at scheduled slot; outside window late (25 min late): demand at predicted slot; outside window early (20 min early): demand at predicted slot, not reduced (FR-010); tolerance configurable (set to 10 min, 12-min-late flight → reclassified); departure outside window: departure window anchored at `floor(predicted_minutes/60)`; slot-level `predicted` (no `predicted_movements`): no reclassification applied
+- [X] T022 [US8] Implement on-time classification in `compute_demand()` in `src/lp/demand.py` — when `predicted_movements` provided, aggregate per `aircraft_type`/`op_type` after tolerance check: compute `|predicted_minutes − scheduled_minutes|` per `FlightMovementInput`; if within `tolerance_minutes` assign to `floor(scheduled_minutes/60)`, else assign to `floor(predicted_minutes/60)`; for early arrivals: use predicted slot, demand not reduced below standard (FR-010); for departures: departure window anchored at reclassified slot; populate `arrival_demand_curve` and `departure_demand_curve` separately before summing into `demand_curve`
 
 **Checkpoint**: Slot reclassification works for late, early, and on-time flights in both directions — US8 fully functional.
 
@@ -175,10 +175,10 @@
 
 **Purpose**: `comparison_report()`, full EFHK integration test, and notebook prototype.
 
-- [ ] T028 [P] Write `tests/lp/test_analysis.py` for comparison_report (FR-008) — `arrival_gap_absolute` and `departure_gap_absolute` computed correctly per slot from `DemandResult.arrival_demand_curve` / `departure_demand_curve`; aggregate pct_total formula correct; `total_scheduled/actual_demand[i] == arrival[i] + departure[i]`; all list lengths equal `len(hours)`; faithfully reflects input differences with no smoothing (SC-003)
-- [ ] T029 [P] Implement `comparison_report()` in `src/lp/analysis.py` — call `compute_demand(scheduled)` and `compute_demand(actuals=actuals)` separately; read `DemandResult.arrival_demand_curve` and `departure_demand_curve` directly (no recomputation); compute per-slot gaps and aggregate pct_total for each direction; return `ComparisonReport`
+- [ ] T028 [P] Write `tests/lp/test_analysis.py` for comparison_report (FR-008) — `arrival_gap_absolute` and `departure_gap_absolute` computed correctly per slot from `DemandResult.arrival_demand_curve` / `departure_demand_curve`; aggregate pct_total formula correct; `total_scheduled/predicted_demand[i] == arrival[i] + departure[i]`; all list lengths equal `len(hours)`; faithfully reflects input differences with no smoothing (SC-003)
+- [ ] T029 [P] Implement `comparison_report()` in `src/lp/analysis.py` — call `compute_demand(scheduled)` and `compute_demand(predicted=predicted)` separately; read `DemandResult.arrival_demand_curve` and `departure_demand_curve` directly (no recomputation); compute per-slot gaps and aggregate pct_total for each direction; return `ComparisonReport`
 - [ ] T030 Update `src/lp/__init__.py` — export `schedule_shifts`, `identify_bottlenecks`, `comparison_report`, `ComparisonReport`, `ShiftConfig`, `ShiftSchedule`, `BottleneckResult`, `DEFAULT_DEPARTURE_STAFFING_STANDARDS`, `DEFAULT_DEPARTURE_WINDOW_SLOTS`, `DEFAULT_ARRIVAL_WINDOW_SLOTS`
-- [X] T031 [P] Create `src/utils/efhk_loader.py` — EFHK CSV loader reading `data/finavia_flights_efhk_20260327.csv`; UTC→Helsinki via `ZoneInfo("Europe/Helsinki")`; ICAO → LP category mapping; operating-window pre-filter (drop hours outside 05:00–23:00 Helsinki); aggregate to `list[FlightSlotInput]`; extract `actual_arrival_time`/`actual_departure_time` → `FlightMovementInput` (default-on)
+- [X] T031 [P] Create `src/utils/efhk_loader.py` — EFHK CSV loader reading `data/finavia_flights_efhk_20260327.csv`; UTC→Helsinki via `ZoneInfo("Europe/Helsinki")`; ICAO → LP category mapping; operating-window pre-filter (drop hours outside 05:00–23:00 Helsinki); aggregate to `list[FlightSlotInput]`; extract `actual_arrival_time`/`actual_departure_time` CSV columns → `FlightMovementInput` as predicted times (default-on)
 - [ ] T032 [P] Create `notebooks/planning/ramp_resource_lp.ipynb` — validation notebook importing from `src/lp` and `src/utils`; load EFHK data via `load_efhk("data/finavia_flights_efhk_20260327.csv")`; call `compute_demand()` and `schedule_shifts()`; display demand curve, shift schedule, and bottleneck hours (Constitution Principle II)
 - [ ] T033 Run full end-to-end integration with `data/finavia_flights_efhk_20260327.csv` (422 flights) — verify demand curve is non-zero across operating hours, schedule_shifts produces feasible headcount, identify_bottlenecks returns results, no ValueError raised after ICAO mapping and window pre-filtering
 - [ ] T034 [P] Write performance benchmark in `tests/lp/` — run `compute_demand()` on the full 422-flight EFHK dataset (all 18 slots pre-filtered via `load_efhk`); assert wall-clock time < 30 s (SC-001)
@@ -199,7 +199,7 @@
 - **US5 (Phase 7)**: Depends on Phase 6 (extends ShiftSchedule; verifies headcount invariant)
 - **US6 (Phase 8)**: Depends on Phase 3 (adds pool_size post-check to compute_demand)
 - **US7 (Phase 9)**: Depends on Phase 4 (both departure and arrival staffing standards must be present)
-- **US8 (Phase 10)**: Depends on Phase 4 (actual_movements classification applies to both directions)
+- **US8 (Phase 10)**: Depends on Phase 4 (predicted_movements classification applies to both directions)
 - **US9 (Phase 11)**: Depends on Phase 6 (requires ShiftSchedule output from schedule_shifts)
 - **Polish (Phase 12)**: Depends on Phases 5, 7, 8, 9, 10, 11 — all stories complete
 
@@ -249,9 +249,9 @@ Merge compute_demand() extensions from US3, US6, US8 carefully — all modify th
 
 ### Current Status (as of 2026-05-02)
 
-Completed phases: **1, 1b, 2, 3, 4, 5, 6, 7, 8** (US1 + US2 + US3 + US4 fully done; US6 implementation done, tests partial; US7 tests done; `load_efhk()` extended with `use_actual_times` parameter)
+Completed phases: **1, 1b, 2, 3, 4, 5, 6, 7, 8, 10** (US1 + US2 + US3 + US4 fully done; US6 implementation done, tests partial; US7 tests done; `load_efhk()` extended with `use_predicted_times` parameter; US8 on-time classification done — all `actual` renamed to `predicted`)
 
-Next up: **US8 (Phase 10)** — on-time classification (T021, T022); **US9 (Phase 11)** — bottleneck analysis (T023-T025)
+Next up: **US9 (Phase 11)** — bottleneck analysis (T023-T025); **Phase 12** — comparison report + integration + notebook
 
 ### Incremental Delivery
 
@@ -263,7 +263,7 @@ Next up: **US8 (Phase 10)** — on-time classification (T021, T022); **US9 (Phas
 6. → US5 → daily headcount → payroll-ready output
 7. → US6 → infeasibility detection tests → safe for production inputs
 8. → US7 → configurable standards (implementation done; tests verified)
-9. → US8 → on-time classification → actuals-ready
+9. ✅ US8 → on-time classification → predicted-times-ready
 10. → US9 → bottleneck analysis → operational insight
 11. → Phase 12 → comparison report + end-to-end integration + notebook
 

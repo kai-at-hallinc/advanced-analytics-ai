@@ -32,7 +32,7 @@ class FlightMovementInput:
     aircraft_type: AircraftType
     op_type: Literal["A", "D"]
     scheduled_minutes: int
-    actual_minutes: int | None = None
+    predicted_minutes: int | None = None
 
     def __post_init__(self) -> None:
         if self.op_type not in ("A", "D"):
@@ -114,15 +114,15 @@ class BottleneckResult:
 class ComparisonReport:
     hours: list[int]
     scheduled_arrival_demand: list[int]
-    actual_arrival_demand: list[int]
+    predicted_arrival_demand: list[int]
     arrival_gap_absolute: list[int]
     arrival_gap_pct_total: float
     scheduled_departure_demand: list[int]
-    actual_departure_demand: list[int]
+    predicted_departure_demand: list[int]
     departure_gap_absolute: list[int]
     departure_gap_pct_total: float
     total_scheduled_demand: list[int]
-    total_actual_demand: list[int]
+    total_predicted_demand: list[int]
 
 
 # --- Module-level constants (defined after classes) ---

@@ -46,25 +46,25 @@ class FlightSlotInput:
 
 ### FlightMovementInput
 
-Represents a single flight movement with minute-level timestamps. Used when tolerance-window slot reclassification (FR-011) is needed. Pass a list of these as `actual_movements` to `compute_demand()`.
+Represents a single flight movement with minute-level timestamps. Used when tolerance-window slot reclassification (FR-011) is needed. Pass a list of these as `predicted_movements` to `compute_demand()`.
 
 ```python
 @dataclass
 class FlightMovementInput:
     aircraft_type: AircraftType
-    op_type: Literal['A', 'D']    # 'A' = arrival, 'D' = departure
-    scheduled_minutes: int              # minutes from midnight (scheduled time)
-    actual_minutes: int | None = None   # minutes from midnight (actual time); None → use scheduled_minutes
+    op_type: Literal['A', 'D']       # 'A' = arrival, 'D' = departure
+    scheduled_minutes: int           # minutes from midnight (scheduled time)
+    predicted_minutes: int | None = None  # minutes from midnight (predicted time); None → use scheduled_minutes
 ```
 
 **Validation rules**:
 
 - `scheduled_minutes` must be in `[operating_day_start * 60, operating_day_end * 60)`.
-- `actual_minutes` if provided: departure pre-window clipping applies silently if it falls before `operating_day_start * 60`; an out-of-window actual arrival raises `ValueError`.
+- `predicted_minutes` if provided: departure pre-window clipping applies silently if it falls before `operating_day_start * 60`; an out-of-window predicted arrival is silently ignored (effective slot not in `hour_to_idx`).
 - `aircraft_type` must be a valid `AircraftType` member.
 - `op_type` must be `'A'` or `'D'`; any other value raises `ValueError`.
 
-**Slot assignment**: `floor(scheduled_minutes / 60)` or `floor(actual_minutes / 60)` after tolerance check.
+**Slot assignment**: `floor(scheduled_minutes / 60)` or `floor(predicted_minutes / 60)` after tolerance check.
 
 ---
 
@@ -217,29 +217,29 @@ class ComparisonReport:
     hours: list[int]                         # clock hours covered
 
     # Arrival direction
-    scheduled_arrival_demand: list[int]      # arrival demand curve from scheduled counts
-    actual_arrival_demand: list[int]         # arrival demand curve from actual counts
-    arrival_gap_absolute: list[int]          # actual_arrival[i] - scheduled_arrival[i] per slot
-    arrival_gap_pct_total: float             # (Σ actual_arr - Σ sched_arr) / Σ sched_arr × 100
+    scheduled_arrival_demand: list[int]       # arrival demand curve from scheduled counts
+    predicted_arrival_demand: list[int]       # arrival demand curve from predicted counts
+    arrival_gap_absolute: list[int]           # predicted_arrival[i] - scheduled_arrival[i] per slot
+    arrival_gap_pct_total: float              # (Σ predicted_arr - Σ sched_arr) / Σ sched_arr × 100
 
     # Departure direction
-    scheduled_departure_demand: list[int]    # departure demand curve from scheduled counts
-    actual_departure_demand: list[int]       # departure demand curve from actual counts
-    departure_gap_absolute: list[int]        # actual_dep[i] - scheduled_dep[i] per slot
-    departure_gap_pct_total: float           # (Σ actual_dep - Σ sched_dep) / Σ sched_dep × 100
+    scheduled_departure_demand: list[int]     # departure demand curve from scheduled counts
+    predicted_departure_demand: list[int]     # departure demand curve from predicted counts
+    departure_gap_absolute: list[int]         # predicted_dep[i] - scheduled_dep[i] per slot
+    departure_gap_pct_total: float            # (Σ predicted_dep - Σ sched_dep) / Σ sched_dep × 100
 
     # Combined
-    total_scheduled_demand: list[int]        # scheduled_arrival_demand[i] + scheduled_departure_demand[i]
-    total_actual_demand: list[int]           # actual_arrival_demand[i] + actual_departure_demand[i]
+    total_scheduled_demand: list[int]         # scheduled_arrival_demand[i] + scheduled_departure_demand[i]
+    total_predicted_demand: list[int]         # predicted_arrival_demand[i] + predicted_departure_demand[i]
 ```
 
 **Invariants**:
 
 - All list fields have the same length as `hours`.
-- `arrival_gap_absolute[i] = actual_arrival_demand[i] - scheduled_arrival_demand[i]`
-- `departure_gap_absolute[i] = actual_departure_demand[i] - scheduled_departure_demand[i]`
+- `arrival_gap_absolute[i] = predicted_arrival_demand[i] - scheduled_arrival_demand[i]`
+- `departure_gap_absolute[i] = predicted_departure_demand[i] - scheduled_departure_demand[i]`
 - `total_scheduled_demand[i] = scheduled_arrival_demand[i] + scheduled_departure_demand[i]`
-- `total_actual_demand[i] = actual_arrival_demand[i] + actual_departure_demand[i]`
+- `total_predicted_demand[i] = predicted_arrival_demand[i] + predicted_departure_demand[i]`
 
 ---
 
@@ -289,5 +289,5 @@ DemandConfig    ──(config)──|                        |
 
 DemandResult + ShiftSchedule ──> identify_bottlenecks() ──> BottleneckResult
 
-FlightSlotInput (scheduled) + FlightSlotInput (actuals) ──> comparison_report() ──> ComparisonReport
+FlightSlotInput (scheduled) + FlightSlotInput (predicted) ──> comparison_report() ──> ComparisonReport
 ```

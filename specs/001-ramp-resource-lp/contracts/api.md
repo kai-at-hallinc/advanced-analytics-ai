@@ -15,10 +15,10 @@ All types are defined in `src/lp/types.py`. See [data-model.md](../data-model.md
 ```python
 def compute_demand(
     scheduled: list[FlightSlotInput],
-    actuals: list[FlightSlotInput] | None = None,
+    predicted: list[FlightSlotInput] | None = None,
     arrival_delay_flags: dict[AircraftType, bool] | None = None,
     departure_delay_flags: dict[AircraftType, bool] | None = None,
-    actual_movements: list[FlightMovementInput] | None = None,
+    predicted_movements: list[FlightMovementInput] | None = None,
     config: DemandConfig = DEFAULT_DEMAND_CONFIG,
 ) -> DemandResult:
 ```
@@ -27,12 +27,12 @@ def compute_demand(
 
 | Arrivals | Departures | Mode applied |
 | -------- | ---------- | ----------- |
-| `actual_movements` provided | `actual_movements` provided | Per-flight tolerance classification against `scheduled_dt`/`actual_dt` |
-| `actuals.arrival_counts` | `actuals.departure_counts` | Slot-level actuals used directly; no tolerance reclassification |
+| `predicted_movements` provided | `predicted_movements` provided | Per-flight tolerance classification against `scheduled_minutes`/`predicted_minutes` |
+| `predicted.arrival_counts` | `predicted.departure_counts` | Slot-level predicted counts used directly; no tolerance reclassification |
 | `arrival_delay_flags` | `departure_delay_flags` | 20/80 heuristic: `n_ij = s_ij · (1 − 0.8·d_i)` per flagged type |
 | neither | neither | Scheduled counts used unchanged |
 
-`actual_movements` takes precedence over `actuals` for the direction(s) it covers. `actuals` takes precedence over delay flags per direction.
+`predicted_movements` takes precedence over `predicted` for the direction(s) it covers. `predicted` takes precedence over delay flags per direction.
 
 ### Demand computation per slot (FR-001, FR-013)
 
@@ -62,18 +62,18 @@ Arrival demand and departure demand are computed independently; neither is deriv
 
 ### On-time classification (FR-011)
 
-Tolerance classification is only available when `actual_movements: list[FlightMovementInput]` is provided. Each `FlightMovementInput` carries `scheduled_dt` and `actual_dt` in minutes-from-midnight.
+Tolerance classification is only available when `predicted_movements: list[FlightMovementInput]` is provided. Each `FlightMovementInput` carries `scheduled_minutes` and `predicted_minutes` in minutes-from-midnight.
 
-- `|actual_dt − scheduled_dt| ≤ tolerance_minutes` → on time; resources attributed to `floor(scheduled_dt / 60)`
-- Otherwise → resources attributed to `floor(actual_dt / 60)`
+- `|predicted_minutes − scheduled_minutes| ≤ tolerance_minutes` → on time; resources attributed to `floor(scheduled_minutes / 60)`
+- Otherwise → resources attributed to `floor(predicted_minutes / 60)`
 
 Applies to both arrival (`op_type='A'`) and departure (`op_type='D'`) movements (FR-011).
 
-When only slot-level `actuals: list[FlightSlotInput]` are provided (no `actual_movements`), flights are already pre-aggregated to their actual slot — no tolerance reclassification is applied.
+When only slot-level `predicted: list[FlightSlotInput]` are provided (no `predicted_movements`), flights are already pre-aggregated to their predicted slot — no tolerance reclassification is applied.
 
 ### Early arrivals (FR-010)
 
-An early arrival (actual slot < scheduled slot and outside tolerance) is treated as a full-demand arrival at its actual slot. The resource count is not reduced below the standard `c_arr_i`.
+An early arrival (predicted slot < scheduled slot and outside tolerance) is treated as a full-demand arrival at its predicted slot. The resource count is not reduced below the standard `c_arr_i`.
 
 ### Departure window boundary clipping
 
@@ -161,21 +161,21 @@ Returns each bottleneck hour labelled with its clock time and the binding demand
 ```python
 def comparison_report(
     scheduled: list[FlightSlotInput],
-    actuals: list[FlightSlotInput],
+    predicted: list[FlightSlotInput],
     config: DemandConfig = DEFAULT_DEMAND_CONFIG,
 ) -> ComparisonReport:
 ```
 
 ### Behaviour
 
-Calls `compute_demand(scheduled)` and `compute_demand(actuals=actuals)` separately, decomposing results into arrival and departure demand components. Computes per-slot and aggregate gap figures for each direction independently (FR-008).
+Calls `compute_demand(scheduled)` and `compute_demand(predicted=predicted)` separately, decomposing results into arrival and departure demand components. Computes per-slot and aggregate gap figures for each direction independently (FR-008).
 
 Produces a direction-level comparison report (see `ComparisonReport` in data-model.md for full field layout):
 
-- Per-slot arrival gap: `actual_arrival_demand[i] - scheduled_arrival_demand[i]`
-- Per-slot departure gap: `actual_departure_demand[i] - scheduled_departure_demand[i]`
+- Per-slot arrival gap: `predicted_arrival_demand[i] - scheduled_arrival_demand[i]`
+- Per-slot departure gap: `predicted_departure_demand[i] - scheduled_departure_demand[i]`
 - Aggregate `arrival_gap_pct_total` and `departure_gap_pct_total` as percentages of scheduled totals
-- Combined `total_scheduled_demand` and `total_actual_demand` per slot
+- Combined `total_scheduled_demand` and `total_predicted_demand` per slot
 
 The report faithfully reflects whatever difference exists in the inputs (SC-003). No empirical threshold is asserted. Per-aircraft-type breakdown is a planned extension (spec.md §Assumptions, extension 9).
 
