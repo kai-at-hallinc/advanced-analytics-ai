@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(& \"c:\\\\Users\\\\BYCLADM\\\\advanced-analytics-ai\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest \"c:\\\\Users\\\\BYCLADM\\\\advanced-analytics-ai\\\\tests\\\\lp\\\\test_demand.py\" \"c:\\\\Users\\\\BYCLADM\\\\advanced-analytics-ai\\\\tests\\\\lp\\\\test_types.py\" -v 2>&1)"
+    ]
+  }
+}

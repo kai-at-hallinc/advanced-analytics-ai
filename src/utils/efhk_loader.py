@@ -12,6 +12,7 @@ import csv
 from collections import defaultdict
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from typing import Optional
 
 from src.lp.types import AircraftType, FlightMovementInput, FlightSlotInput
 
@@ -76,7 +77,7 @@ def load_efhk(
     operating_day_end: int = 23,
     extract_tau: bool = True,
     use_tau_times: bool = False,
-) -> tuple[list[FlightSlotInput], list[FlightMovementInput] | None]:
+) -> tuple[list[FlightSlotInput], Optional[list[FlightMovementInput]]]:
     """Load a Finavia EFHK CSV and return scheduled slots and optional per-flight movements.
 
     Scheduled times (UTC) are converted to Helsinki local time via
@@ -106,7 +107,7 @@ def load_efhk(
 
     Returns
     -------
-    tuple[list[FlightSlotInput], list[FlightMovementInput] | None]
+    tuple[list[FlightSlotInput], Optional[list[FlightMovementInput]]]
         Slots aggregated by the chosen time (scheduled or tau), and per-flight
         movement records (only when ``extract_tau=True``).
     """

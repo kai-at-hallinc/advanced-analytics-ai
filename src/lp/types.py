@@ -46,35 +46,26 @@ class FlightMovementInput:
 @dataclass
 class DemandConfig:
     staffing_standards: dict[AircraftType, int] = field(
-        default_factory=lambda: {
-            AircraftType.NARROW_BODY: 3,
-            AircraftType.WIDE_BODY: 5,
-            AircraftType.CARGO: 6,
-        }
+        default_factory=lambda: dict(DEFAULT_STAFFING_STANDARDS)
     )
     arrival_window_slots: dict[AircraftType, int] = field(
-        default_factory=lambda: {
-            AircraftType.NARROW_BODY: 1,
-            AircraftType.WIDE_BODY: 2,
-            AircraftType.CARGO: 3,
-        }
+        default_factory=lambda: dict(DEFAULT_ARRIVAL_WINDOW_SLOTS)
     )
     departure_staffing_standards: dict[AircraftType, int] = field(
-        default_factory=lambda: {
-            AircraftType.NARROW_BODY: 3,
-            AircraftType.WIDE_BODY: 5,
-            AircraftType.CARGO: 6,
-        }
+        default_factory=lambda: dict(DEFAULT_DEPARTURE_STAFFING_STANDARDS)
     )
     departure_window_slots: dict[AircraftType, int] = field(
-        default_factory=lambda: {
-            AircraftType.NARROW_BODY: 1,
-            AircraftType.WIDE_BODY: 2,
-            AircraftType.CARGO: 3,
-        }
+        default_factory=lambda: dict(DEFAULT_DEPARTURE_WINDOW_SLOTS)
     )
     tolerance_minutes: int = 15
     pool_size: float = math.inf  # workforce ceiling; math.inf = unconstrained (default)
+
+    arrival_capacity_per_worker: dict[AircraftType, float] = field(
+        default_factory=lambda: dict(DEFAULT_ARRIVAL_CAPACITY_PER_WORKER)
+    )
+    departure_capacity_per_worker: dict[AircraftType, float] = field(
+        default_factory=lambda: dict(DEFAULT_DEPARTURE_CAPACITY_PER_WORKER)
+    )
     operating_day_start: int = 5
     operating_day_end: int = 23
 
@@ -91,7 +82,7 @@ class DemandResult:
 
 @dataclass
 class ShiftConfig:
-    shift_length: int = 8
+    shift_length: int = 10
     operating_hours: list[int] = field(default_factory=lambda: list(range(5, 23)))
 
 
@@ -135,8 +126,8 @@ DEFAULT_STAFFING_STANDARDS: dict[AircraftType, int] = {
 
 DEFAULT_ARRIVAL_WINDOW_SLOTS: dict[AircraftType, int] = {
     AircraftType.NARROW_BODY: 1,
-    AircraftType.WIDE_BODY: 2,
-    AircraftType.CARGO: 3,
+    AircraftType.WIDE_BODY: 1,
+    AircraftType.CARGO: 2,
 }
 
 DEFAULT_DEPARTURE_STAFFING_STANDARDS: dict[AircraftType, int] = {
@@ -147,8 +138,19 @@ DEFAULT_DEPARTURE_STAFFING_STANDARDS: dict[AircraftType, int] = {
 
 DEFAULT_DEPARTURE_WINDOW_SLOTS: dict[AircraftType, int] = {
     AircraftType.NARROW_BODY: 1,
-    AircraftType.WIDE_BODY: 2,
-    AircraftType.CARGO: 3,
+    AircraftType.WIDE_BODY: 1,
+    AircraftType.CARGO: 2,
+}
+
+DEFAULT_ARRIVAL_CAPACITY_PER_WORKER: dict[AircraftType, float] = {
+    AircraftType.NARROW_BODY: 2.0,
+    AircraftType.WIDE_BODY: 1.0,
+    AircraftType.CARGO: 1.0,
+}
+DEFAULT_DEPARTURE_CAPACITY_PER_WORKER: dict[AircraftType, float] = {
+    AircraftType.NARROW_BODY: 2.0,
+    AircraftType.WIDE_BODY: 1.0,
+    AircraftType.CARGO: 1.0,
 }
 
 DEFAULT_OPERATING_HOURS: list[int] = list(range(5, 23))

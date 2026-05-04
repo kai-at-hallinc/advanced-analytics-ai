@@ -99,6 +99,7 @@ def compute_demand(
         n_slots,
         config.staffing_standards,
         config.arrival_window_slots,
+        capacity_per_worker=config.arrival_capacity_per_worker,
     )
 
     # --- Departure demand (backward window) ---
@@ -109,6 +110,7 @@ def compute_demand(
         config.departure_staffing_standards,
         config.departure_window_slots,
         backward=True,
+        capacity_per_worker=config.departure_capacity_per_worker,
     )
 
     # --- Convert to int and combine ---

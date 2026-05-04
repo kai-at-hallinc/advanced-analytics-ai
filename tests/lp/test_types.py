@@ -31,8 +31,8 @@ def test_demand_config_defaults_staffing_standards():
 def test_demand_config_defaults_arrival_windows():
     cfg = DemandConfig()
     assert cfg.arrival_window_slots[AircraftType.NARROW_BODY] == 1
-    assert cfg.arrival_window_slots[AircraftType.WIDE_BODY] == 2
-    assert cfg.arrival_window_slots[AircraftType.CARGO] == 3
+    assert cfg.arrival_window_slots[AircraftType.WIDE_BODY] == 1
+    assert cfg.arrival_window_slots[AircraftType.CARGO] == 2
 
 
 def test_demand_config_defaults_departure_staffing_standards():
@@ -45,8 +45,8 @@ def test_demand_config_defaults_departure_staffing_standards():
 def test_demand_config_defaults_departure_windows():
     cfg = DemandConfig()
     assert cfg.departure_window_slots[AircraftType.NARROW_BODY] == 1
-    assert cfg.departure_window_slots[AircraftType.WIDE_BODY] == 2
-    assert cfg.departure_window_slots[AircraftType.CARGO] == 3
+    assert cfg.departure_window_slots[AircraftType.WIDE_BODY] == 1
+    assert cfg.departure_window_slots[AircraftType.CARGO] == 2
 
 
 def test_demand_config_defaults_are_independent_instances():

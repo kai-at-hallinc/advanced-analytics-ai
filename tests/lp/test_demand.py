@@ -31,26 +31,24 @@ def test_single_narrow_body_single_slot():
             assert result.demand_curve[i] == 0
 
 
-def test_wide_body_arrival_window_spans_two_slots():
+def test_wide_body_arrival_window_spans_one_slot():
     scheduled = [FlightSlotInput(hour=10, arrival_counts={AircraftType.WIDE_BODY: 1})]
     result = compute_demand(scheduled)
     idx_10 = result.operating_hours.index(10)
-    idx_11 = result.operating_hours.index(11)
-    assert result.demand_curve[idx_10] == 5    # 1 × 5
-    assert result.demand_curve[idx_11] == 5
+    assert result.demand_curve[idx_10] == 5    # 1 × 5, window=1
     for i, h in enumerate(result.operating_hours):
-        if h not in (10, 11):
+        if h != 10:
             assert result.demand_curve[i] == 0
 
 
-def test_cargo_arrival_window_spans_three_slots():
+def test_cargo_arrival_window_spans_two_slots():
     scheduled = [FlightSlotInput(hour=8, arrival_counts={AircraftType.CARGO: 1})]
     result = compute_demand(scheduled)
-    for h in (8, 9, 10):
+    for h in (8, 9):
         idx = result.operating_hours.index(h)
-        assert result.demand_curve[idx] == 6   # 1 × 6
+        assert result.demand_curve[idx] == 6   # 1 × 6, window=2
     for i, h in enumerate(result.operating_hours):
-        if h not in (8, 9, 10):
+        if h not in (8, 9):
             assert result.demand_curve[i] == 0
 
 
@@ -61,9 +59,10 @@ def test_multi_type_same_slot_sums_independently():
     )]
     result = compute_demand(scheduled)
     idx_12 = result.operating_hours.index(12)
-    idx_13 = result.operating_hours.index(13)
-    assert result.demand_curve[idx_12] == 11   # 2×3 + 1×5
-    assert result.demand_curve[idx_13] == 5    # only wide_body window continues
+    assert result.demand_curve[idx_12] == 11   # 2×3 + 1×5; NB and WB both window=1
+    for i, h in enumerate(result.operating_hours):
+        if h != 12:
+            assert result.demand_curve[i] == 0
 
 
 def test_multiple_slots_accumulate():
@@ -217,18 +216,15 @@ def test_default_pool_size_is_unconstrained():
 # ---------------------------------------------------------------------------
 
 def test_departure_only_wide_body_backward_window():
-    # 1 wide-body departure at 14:00 → backward window=2 → demand at slots 13 and 14
+    # 1 wide-body departure at 14:00 → backward window=1 → demand at slot 14 only
     scheduled = [FlightSlotInput(hour=14, departure_counts={AircraftType.WIDE_BODY: 1})]
     result = compute_demand(scheduled)
-    idx_13 = result.operating_hours.index(13)
     idx_14 = result.operating_hours.index(14)
-    assert result.demand_curve[idx_13] == 5    # 1 × 5
-    assert result.demand_curve[idx_14] == 5
-    assert result.departure_demand_curve[idx_13] == 5
+    assert result.demand_curve[idx_14] == 5    # 1 × 5, window=1
     assert result.departure_demand_curve[idx_14] == 5
     assert all(v == 0 for v in result.arrival_demand_curve)
     for i, h in enumerate(result.operating_hours):
-        if h not in (13, 14):
+        if h != 14:
             assert result.demand_curve[i] == 0
 
 
@@ -242,15 +238,15 @@ def test_departure_only_narrow_body_backward_window_one_slot():
             assert result.demand_curve[i] == 0
 
 
-def test_departure_only_cargo_backward_window_three_slots():
-    # CARGO departure at 12:00, window=3 → demand at slots 10, 11, 12
+def test_departure_only_cargo_backward_window_two_slots():
+    # CARGO departure at 12:00, window=2 → demand at slots 11, 12
     scheduled = [FlightSlotInput(hour=12, departure_counts={AircraftType.CARGO: 1})]
     result = compute_demand(scheduled)
-    for h in (10, 11, 12):
+    for h in (11, 12):
         idx = result.operating_hours.index(h)
-        assert result.demand_curve[idx] == 6   # 1 × 6
+        assert result.demand_curve[idx] == 6   # 1 × 6, window=2
     for i, h in enumerate(result.operating_hours):
-        if h not in (10, 11, 12):
+        if h not in (11, 12):
             assert result.demand_curve[i] == 0
 
 
@@ -269,11 +265,11 @@ def test_arrival_and_departure_independent_no_cross_contamination():
     assert result.arrival_demand_curve[idx_9] == 0
     assert result.arrival_demand_curve[idx_10] == 3
     assert result.arrival_demand_curve[idx_11] == 0
-    # departure at 10: window=2 → demand at 9 and 10
-    assert result.departure_demand_curve[idx_9] == 5
+    # departure at 10: window=1 → demand at 10 only
+    assert result.departure_demand_curve[idx_9] == 0
     assert result.departure_demand_curve[idx_10] == 5
     # combined
-    assert result.demand_curve[idx_9] == 5
+    assert result.demand_curve[idx_9] == 0
     assert result.demand_curve[idx_10] == 8    # 3 + 5
     assert result.demand_curve[idx_11] == 0
 
@@ -363,24 +359,22 @@ def test_arrival_delay_flag_narrow_body_20_80_split():
 
 def test_departure_delay_flag_wide_body_20_80_split():
     # 5 WB departures at hour 14 delayed: 1 on-time at 14, 4 delayed at 15
-    # WB departure window=2 (backward); standard=5
-    # On-time (1 dep at 14): demand at slots 13, 14 = 5 each
-    # Delayed (4 deps at 15): demand at slots 14, 15 = 20 each
+    # WB departure window=1 (backward); standard=5
+    # On-time (1 dep at 14): demand at slot 14 = 5
+    # Delayed (4 deps at 15): demand at slot 15 = 20
     scheduled = [FlightSlotInput(hour=14, departure_counts={AircraftType.WIDE_BODY: 5})]
     result = compute_demand(scheduled, departure_delay_flags={AircraftType.WIDE_BODY: True})
-    idx_13 = result.operating_hours.index(13)
     idx_14 = result.operating_hours.index(14)
     idx_15 = result.operating_hours.index(15)
-    assert result.departure_demand_curve[idx_13] == 5    # on-time only
-    assert result.departure_demand_curve[idx_14] == 25   # 5 (on-time) + 20 (delayed)
-    assert result.departure_demand_curve[idx_15] == 20   # delayed only
+    assert result.departure_demand_curve[idx_14] == 5    # on-time only (1 × 5)
+    assert result.departure_demand_curve[idx_15] == 20   # delayed only (4 × 5)
     assert all(result.arrival_demand_curve[i] == 0 for i in range(len(result.operating_hours)))
 
 
 def test_mixed_arrival_delayed_and_on_time_same_slot():
     # 5 NB arrivals (delayed) + 5 WB arrivals (on-time) at hour 10
     # NB: 1 at slot 10, 4 at slot 11 (delay heuristic)
-    # WB: 5 at slots 10 and 11 (window=2, on-time)
+    # WB: 5 at slot 10 only (window=1, on-time)
     scheduled = [FlightSlotInput(
         hour=10,
         arrival_counts={AircraftType.NARROW_BODY: 5, AircraftType.WIDE_BODY: 5},
@@ -390,8 +384,8 @@ def test_mixed_arrival_delayed_and_on_time_same_slot():
     idx_11 = result.operating_hours.index(11)
     # slot 10: NB 1*3=3 + WB 5*5=25 = 28
     assert result.arrival_demand_curve[idx_10] == 28
-    # slot 11: NB delayed 4*3=12 + WB window 5*5=25 = 37
-    assert result.arrival_demand_curve[idx_11] == 37
+    # slot 11: NB delayed 4*3=12 only; WB window=1 does not spill
+    assert result.arrival_demand_curve[idx_11] == 12
 
 
 def test_arrival_delay_flag_does_not_affect_departure_counts():
@@ -458,8 +452,8 @@ def test_tau_overrides_departure_delay_flag():
     idx_13 = result.operating_hours.index(13)
     idx_14 = result.operating_hours.index(14)
     idx_15 = result.operating_hours.index(15)
-    # predicted wins: 3 WB at 14, window=2 backward → slots 13, 14 = 15 each; no shift to 15
-    assert result.departure_demand_curve[idx_13] == 15
+    # predicted wins: 3 WB at 14, window=1 backward → slot 14 = 15 only; no spill to 13 or 15
+    assert result.departure_demand_curve[idx_13] == 0
     assert result.departure_demand_curve[idx_14] == 15
     assert result.departure_demand_curve[idx_15] == 0
 
@@ -547,7 +541,7 @@ def test_custom_tolerance_reclassifies_12min_late_flight():
 
 def test_departure_outside_window_anchored_at_tau_slot():
     # WB departure scheduled 13:50 (830 min), predicted 15:10 (910 min) — 80 min late → reclassified
-    # effective slot = floor(910/60) = 15; WB backward window=2 → demand at slots 14, 15
+    # effective slot = floor(910/60) = 15; WB backward window=1 → demand at slot 15 only
     movements = [
         FlightMovementInput(
             aircraft_type=AircraftType.WIDE_BODY,
@@ -560,7 +554,7 @@ def test_departure_outside_window_anchored_at_tau_slot():
     result = compute_demand(scheduled, tau_movements=movements)
     idx_14 = result.operating_hours.index(14)
     idx_15 = result.operating_hours.index(15)
-    assert result.departure_demand_curve[idx_14] == 5  # backward window from reclassified slot 15
+    assert result.departure_demand_curve[idx_14] == 0  # window=1: only slot 15
     assert result.departure_demand_curve[idx_15] == 5
 
 
@@ -573,3 +567,59 @@ def test_slot_level_tau_no_reclassification():
     idx_10 = result.operating_hours.index(10)
     assert result.arrival_demand_curve[idx_9] == 0   # predicted slot-level takes effect directly
     assert result.arrival_demand_curve[idx_10] == 3
+
+
+# ---------------------------------------------------------------------------
+# capacity_per_worker: multiple flights per worker per hour
+# ---------------------------------------------------------------------------
+
+def test_arrival_capacity_per_worker_default_one_is_identity():
+    # arrival_capacity=1.0 for all types must produce identical demand to omitting it
+    scheduled = [FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 10})]
+    base = compute_demand(scheduled)
+    cfg = DemandConfig(arrival_capacity_per_worker={t: 1.0 for t in AircraftType})
+    with_cap = compute_demand(scheduled, config=cfg)
+    assert base.demand_curve == with_cap.demand_curve
+
+
+def test_arrival_capacity_per_worker_halves_narrow_body_demand():
+    # 10 NB arrivals, window=1, standard=3, arrival_capacity=2 → demand = round(10 × 3/2) = 15
+    scheduled = [FlightSlotInput(hour=10, arrival_counts={AircraftType.NARROW_BODY: 10})]
+    cfg = DemandConfig(arrival_capacity_per_worker={
+        AircraftType.NARROW_BODY: 2.0,
+        AircraftType.WIDE_BODY: 1.0,
+        AircraftType.CARGO: 1.0,
+    })
+    result = compute_demand(scheduled, config=cfg)
+    idx_10 = result.operating_hours.index(10)
+    assert result.arrival_demand_curve[idx_10] == 15    # 10 × (3/2) = 15
+
+
+def test_departure_capacity_per_worker_halves_narrow_body_demand():
+    # 4 NB departures, window=1, standard=3, departure_capacity=2 → demand = round(4 × 3/2) = 6
+    scheduled = [FlightSlotInput(hour=10, departure_counts={AircraftType.NARROW_BODY: 4})]
+    cfg = DemandConfig(departure_capacity_per_worker={
+        AircraftType.NARROW_BODY: 2.0,
+        AircraftType.WIDE_BODY: 1.0,
+        AircraftType.CARGO: 1.0,
+    })
+    result = compute_demand(scheduled, config=cfg)
+    idx_10 = result.operating_hours.index(10)
+    assert result.departure_demand_curve[idx_10] == 6   # 4 × (3/2) = 6
+
+
+def test_arrival_and_departure_capacity_are_independent():
+    # arrival_capacity=2 halves arrival demand; departure_capacity=1 leaves departure unchanged
+    scheduled = [FlightSlotInput(
+        hour=10,
+        arrival_counts={AircraftType.NARROW_BODY: 4},
+        departure_counts={AircraftType.NARROW_BODY: 4},
+    )]
+    cfg = DemandConfig(
+        arrival_capacity_per_worker={t: 2.0 for t in AircraftType},
+        departure_capacity_per_worker={t: 1.0 for t in AircraftType},
+    )
+    result = compute_demand(scheduled, config=cfg)
+    idx_10 = result.operating_hours.index(10)
+    assert result.arrival_demand_curve[idx_10] == 6     # 4 × (3/2) = 6
+    assert result.departure_demand_curve[idx_10] == 12  # 4 × 3 unchanged

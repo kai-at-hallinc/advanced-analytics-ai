@@ -119,6 +119,7 @@ def _spread_demand(
     windows: Mapping[AircraftType, int],
     *,
     backward: bool = False,
+    capacity_per_worker: Mapping[AircraftType, float] | None = None,
 ) -> list[float]:
     """Spread per-hour aircraft counts into a worker demand array using staffing windows.
 
@@ -136,6 +137,8 @@ def _spread_demand(
         standards: per-type worker count per flight (staffing standard).
         windows: per-type number of slots the demand spans.
         backward: if True, applies the backward departure window; default False (arrival).
+        capacity_per_worker: flights one worker can handle per hour per type; divides the
+            effective staffing standard. ``None`` or missing key defaults to 1.0 (no effect).
 
     Returns:
         ``list[float]`` of length ``n_slots`` — worker demand contribution per slot.
@@ -146,8 +149,10 @@ def _spread_demand(
             continue
         idx = hour_to_idx[hour]
         for ac_type, count in ac_counts.items():
+            cap = capacity_per_worker.get(ac_type, 1.0) if capacity_per_worker else 1.0
+            effective_standard = standards[ac_type] / cap if cap > 0 else standards[ac_type]
             w = windows[ac_type]
             slots = range(max(0, idx - w + 1), idx + 1) if backward else range(idx, min(idx + w, n_slots))
             for i in slots:
-                demand[i] += count * standards[ac_type]
+                demand[i] += count * effective_standard
     return demand
