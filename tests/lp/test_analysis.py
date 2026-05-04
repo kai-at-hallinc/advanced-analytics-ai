@@ -1,16 +1,19 @@
 """
-Tests for identify_bottlenecks() — US9.
-Phase 11 (T023): bottleneck hour identification.
+Tests for identify_bottlenecks() — US9 (T023).
+Tests for comparison_report()      — FR-008 (T028).
+Phase 11/12 analysis tests.
 """
 import pytest
 
 from src.lp.types import (
+    AircraftType,
     BottleneckResult,
     DemandResult,
+    FlightSlotInput,
     ShiftConfig,
     ShiftSchedule,
 )
-from src.lp.analysis import identify_bottlenecks
+from src.lp.analysis import comparison_report, identify_bottlenecks
 
 
 # ---------------------------------------------------------------------------
@@ -147,3 +150,105 @@ def test_independent_test_from_spec():
     assert result.bottleneck_hours == [7]
     assert result.demand_at_bottleneck == {7: 5}
     assert 10 not in result.bottleneck_hours
+
+
+# ---------------------------------------------------------------------------
+# FR-008: comparison_report (T028)
+# ---------------------------------------------------------------------------
+
+NB = AircraftType.NARROW_BODY
+WB = AircraftType.WIDE_BODY
+
+
+def _slot(hour: int, arr: int = 0, dep: int = 0) -> FlightSlotInput:
+    counts: dict = {}
+    if arr:
+        counts["arrival_counts"] = {NB: arr}
+    if dep:
+        counts["departure_counts"] = {NB: dep}
+    return FlightSlotInput(hour=hour, **counts)
+
+
+def test_arrival_gap_absolute_computed_per_slot():
+    # scheduled: hour 5 → 1 NB arrival → demand=3; tau: hour 5 → 2 NB → demand=6
+    sched = [_slot(5, arr=1)]
+    tau = [_slot(5, arr=2)]
+    report = comparison_report(sched, tau)
+    h5_idx = report.hours.index(5)
+    assert report.arrival_gap_absolute[h5_idx] == report.tau_arrival_demand[h5_idx] - report.scheduled_arrival_demand[h5_idx]
+    assert report.arrival_gap_absolute[h5_idx] == 3  # (2-1)*3 workers
+
+
+def test_departure_gap_absolute_computed_per_slot():
+    sched = [_slot(6, dep=2)]
+    tau = [_slot(6, dep=3)]
+    report = comparison_report(sched, tau)
+    h6_idx = report.hours.index(6)
+    assert report.departure_gap_absolute[h6_idx] == (
+        report.tau_departure_demand[h6_idx] - report.scheduled_departure_demand[h6_idx]
+    )
+    assert report.departure_gap_absolute[h6_idx] == 3  # (3-2)*3
+
+
+def test_aggregate_arrival_gap_pct_total():
+    # scheduled: 2 NB arr → demand=6; tau: 3 NB arr → demand=9; pct=(9-6)/6*100=50
+    sched = [_slot(5, arr=2)]
+    tau = [_slot(5, arr=3)]
+    report = comparison_report(sched, tau)
+    assert abs(report.arrival_gap_pct_total - 50.0) < 1e-9
+
+
+def test_aggregate_departure_gap_pct_total():
+    sched = [_slot(7, dep=4)]
+    tau = [_slot(7, dep=2)]
+    report = comparison_report(sched, tau)
+    # (2-4)/4*100 = -50%
+    assert abs(report.departure_gap_pct_total - (-50.0)) < 1e-9
+
+
+def test_total_scheduled_and_tau_demand_are_sums():
+    sched = [_slot(5, arr=1, dep=1)]
+    tau = [_slot(5, arr=2, dep=1)]
+    report = comparison_report(sched, tau)
+    idx = report.hours.index(5)
+    assert report.total_scheduled_demand[idx] == (
+        report.scheduled_arrival_demand[idx] + report.scheduled_departure_demand[idx]
+    )
+    assert report.total_tau_demand[idx] == (
+        report.tau_arrival_demand[idx] + report.tau_departure_demand[idx]
+    )
+
+
+def test_all_list_lengths_equal_hours():
+    sched = [_slot(h, arr=1) for h in range(5, 10)]
+    tau = [_slot(h, arr=1) for h in range(5, 10)]
+    report = comparison_report(sched, tau)
+    n = len(report.hours)
+    assert len(report.scheduled_arrival_demand) == n
+    assert len(report.tau_arrival_demand) == n
+    assert len(report.arrival_gap_absolute) == n
+    assert len(report.scheduled_departure_demand) == n
+    assert len(report.tau_departure_demand) == n
+    assert len(report.departure_gap_absolute) == n
+    assert len(report.total_scheduled_demand) == n
+    assert len(report.total_tau_demand) == n
+
+
+def test_no_smoothing_faithfully_reflects_inputs():
+    # SC-003: report must reflect raw differences, no averaging or thresholding
+    sched = [_slot(5, arr=1), _slot(6, arr=10)]
+    tau = [_slot(5, arr=10), _slot(6, arr=1)]
+    report = comparison_report(sched, tau)
+    h5 = report.hours.index(5)
+    h6 = report.hours.index(6)
+    # Large positive gap at 5, large negative gap at 6
+    assert report.arrival_gap_absolute[h5] > 0
+    assert report.arrival_gap_absolute[h6] < 0
+
+
+def test_zero_scheduled_arrival_total_pct_is_zero():
+    # When scheduled total is zero, pct should be 0.0 (no division by zero)
+    sched = [_slot(5, dep=1)]   # arrivals=0
+    tau = [_slot(5, arr=2, dep=1)]
+    report = comparison_report(sched, tau)
+    assert report.arrival_gap_pct_total == 0.0

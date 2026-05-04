@@ -71,22 +71,22 @@ demand_dep_delayed = compute_demand(
 
 ---
 
-## With Actual Arrival Counts
+## With Tau (Predicted/Actual) Arrival Counts
 
 ```python
-# Provide actual counts — used directly, overrides delay heuristic
-actuals = [
+# Provide tau counts — used directly, overrides delay heuristic
+tau = [
     FlightSlotInput(hour=5,  arrival_counts={AircraftType.NARROW_BODY: 2}),
     FlightSlotInput(hour=6,  arrival_counts={AircraftType.NARROW_BODY: 3, AircraftType.WIDE_BODY: 2}),  # one wide-body shifted to 06:00
     # ...
 ]
 
-demand_actual = compute_demand(scheduled, actuals=actuals)
+demand_tau = compute_demand(scheduled, tau=tau)
 
-# Compare scheduled vs actual demand (direction-level report)
-report = comparison_report(scheduled, actuals)
+# Compare scheduled vs tau demand (direction-level report)
+report = comparison_report(scheduled, tau)
 print(f"Scheduled total: {sum(report.total_scheduled_demand)}")
-print(f"Actual total:    {sum(report.total_actual_demand)}")
+print(f"Tau total:       {sum(report.total_tau_demand)}")
 print(f"Arrival gap:   {report.arrival_gap_pct_total:.1f}%")
 print(f"Departure gap: {report.departure_gap_pct_total:.1f}%")
 ```
@@ -124,12 +124,12 @@ The integration layer (`src/utils/efhk_loader.py`) handles all dataset-specific 
 from src.utils import load_efhk
 from src.lp import compute_demand, schedule_shifts
 
-# Default: actuals extracted → FR-011 tolerance-window reclassification applied
+# Default: tau times extracted → FR-011 tolerance-window reclassification applied
 scheduled, movements = load_efhk("data/finavia_flights_efhk_20260327.csv")
-demand = compute_demand(scheduled, actual_movements=movements)
+demand = compute_demand(scheduled, tau_movements=movements)
 
 # Scheduled-only mode
-scheduled, _ = load_efhk("data/finavia_flights_efhk_20260327.csv", extract_actuals=False)
+scheduled, _ = load_efhk("data/finavia_flights_efhk_20260327.csv", extract_tau=False)
 demand_sched = compute_demand(scheduled)
 
 schedule = schedule_shifts(demand)

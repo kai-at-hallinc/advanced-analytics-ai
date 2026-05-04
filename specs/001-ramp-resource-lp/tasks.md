@@ -175,13 +175,13 @@
 
 **Purpose**: `comparison_report()`, full EFHK integration test, and notebook prototype.
 
-- [ ] T028 [P] Write `tests/lp/test_analysis.py` for comparison_report (FR-008) — `arrival_gap_absolute` and `departure_gap_absolute` computed correctly per slot from `DemandResult.arrival_demand_curve` / `departure_demand_curve`; aggregate pct_total formula correct; `total_scheduled/tau_demand[i] == arrival[i] + departure[i]`; all list lengths equal `len(hours)`; faithfully reflects input differences with no smoothing (SC-003)
-- [ ] T029 [P] Implement `comparison_report()` in `src/lp/analysis.py` — call `compute_demand(scheduled)` and `compute_demand(tau=tau)` separately; read `DemandResult.arrival_demand_curve` and `departure_demand_curve` directly (no recomputation); compute per-slot gaps and aggregate pct_total for each direction; return `ComparisonReport`
-- [ ] T030 Update `src/lp/__init__.py` — export `schedule_shifts`, `identify_bottlenecks`, `comparison_report`, `ComparisonReport`, `ShiftConfig`, `ShiftSchedule`, `BottleneckResult`, `DEFAULT_DEPARTURE_STAFFING_STANDARDS`, `DEFAULT_DEPARTURE_WINDOW_SLOTS`, `DEFAULT_ARRIVAL_WINDOW_SLOTS`
+- [X] T028 [P] Write `tests/lp/test_analysis.py` for comparison_report (FR-008) — `arrival_gap_absolute` and `departure_gap_absolute` computed correctly per slot from `DemandResult.arrival_demand_curve` / `departure_demand_curve`; aggregate pct_total formula correct; `total_scheduled/tau_demand[i] == arrival[i] + departure[i]`; all list lengths equal `len(hours)`; faithfully reflects input differences with no smoothing (SC-003)
+- [X] T029 [P] Implement `comparison_report()` in `src/lp/analysis.py` — call `compute_demand(scheduled)` and `compute_demand(tau=tau)` separately; read `DemandResult.arrival_demand_curve` and `departure_demand_curve` directly (no recomputation); compute per-slot gaps and aggregate pct_total for each direction; return `ComparisonReport`
+- [X] T030 Update `src/lp/__init__.py` — export `schedule_shifts`, `identify_bottlenecks`, `comparison_report`, `ComparisonReport`, `ShiftConfig`, `ShiftSchedule`, `BottleneckResult`, `DEFAULT_DEPARTURE_STAFFING_STANDARDS`, `DEFAULT_DEPARTURE_WINDOW_SLOTS`, `DEFAULT_ARRIVAL_WINDOW_SLOTS`
 - [X] T031 [P] Create `src/utils/efhk_loader.py` — EFHK CSV loader reading `data/finavia_flights_efhk_20260327.csv`; UTC→Helsinki via `ZoneInfo("Europe/Helsinki")`; ICAO → LP category mapping; operating-window pre-filter (drop hours outside 05:00–23:00 Helsinki); aggregate to `list[FlightSlotInput]`; extract `actual_arrival_time`/`actual_departure_time` CSV columns → `FlightMovementInput` as tau times (default-on)
-- [ ] T032 [P] Create `notebooks/planning/ramp_resource_lp.ipynb` — validation notebook importing from `src/lp` and `src/utils`; load EFHK data via `load_efhk("data/finavia_flights_efhk_20260327.csv")`; call `compute_demand()` and `schedule_shifts()`; display demand curve, shift schedule, and bottleneck hours (Constitution Principle II)
-- [ ] T033 Run full end-to-end integration with `data/finavia_flights_efhk_20260327.csv` (422 flights) — verify demand curve is non-zero across operating hours, schedule_shifts produces feasible headcount, identify_bottlenecks returns results, no ValueError raised after ICAO mapping and window pre-filtering
-- [ ] T034 [P] Write performance benchmark in `tests/lp/` — run `compute_demand()` on the full 422-flight EFHK dataset (all 18 slots pre-filtered via `load_efhk`); assert wall-clock time < 30 s (SC-001)
+- [X] T032 [P] Create `notebooks/planning/ramp_resource_lp.ipynb` — validation notebook importing from `src/lp` and `src/utils`; load EFHK data via `load_efhk("data/finavia_flights_efhk_20260327.csv")`; call `compute_demand()` and `schedule_shifts()`; display demand curve, shift schedule, and bottleneck hours (Constitution Principle II)
+- [X] T033 Run full end-to-end integration with `data/finavia_flights_efhk_20260327.csv` (422 flights) — verify demand curve is non-zero across operating hours, schedule_shifts produces feasible headcount, identify_bottlenecks returns results, no ValueError raised after ICAO mapping and window pre-filtering
+- [X] T034 [P] Write performance benchmark in `tests/lp/` — run `compute_demand()` on the full 422-flight EFHK dataset (all 18 slots pre-filtered via `load_efhk`); assert wall-clock time < 30 s (SC-001)
 
 ---
 
@@ -247,25 +247,26 @@ Merge compute_demand() extensions from US3, US6, US8 carefully — all modify th
 
 ## Implementation Strategy
 
-### Current Status (as of 2026-05-02)
+### Current Status (as of 2026-05-03)
 
-Completed phases: **1, 1b, 2, 3, 4, 5, 6, 7, 8, 10** (US1 + US2 + US3 + US4 fully done; US6 implementation done, tests partial; US7 tests done; `load_efhk()` extended with `use_tau_times` parameter; US8 on-time classification done — all `actual` renamed to `tau`)
+**ALL PHASES COMPLETE.** Phases 1–12 implemented and all 113 tests passing.
 
-Next up: **US9 (Phase 11)** — bottleneck analysis (T023-T025); **Phase 12** — comparison report + integration + notebook
+- Phase 11 (US9): bottleneck hour identification — T023–T025 ✅
+- Phase 12 (Polish): `comparison_report()`, end-to-end integration, notebook, benchmark — T028–T034 ✅
 
 ### Incremental Delivery
 
 1. ✅ Setup + Utils + Foundational → types importable, EFHK loader working
 2. ✅ US1 → `compute_demand()` working on scheduled arrivals → MVP
 3. ✅ US2 → departure demand → full two-direction demand model
-4. → US3 → delay adjustment (both directions) → delay-aware demand
-5. → US4 → `schedule_shifts()` working → shift plan produceable
-6. → US5 → daily headcount → payroll-ready output
-7. → US6 → infeasibility detection tests → safe for production inputs
-8. → US7 → configurable standards (implementation done; tests verified)
+4. ✅ US3 → delay adjustment (both directions) → delay-aware demand
+5. ✅ US4 → `schedule_shifts()` working → shift plan produceable
+6. ✅ US5 → daily headcount → payroll-ready output
+7. ✅ US6 → infeasibility detection → safe for production inputs
+8. ✅ US7 → configurable standards (implementation + tests verified)
 9. ✅ US8 → on-time classification → tau-times-ready
-10. → US9 → bottleneck analysis → operational insight
-11. → Phase 12 → comparison report + end-to-end integration + notebook
+10. ✅ US9 → bottleneck analysis → operational insight
+11. ✅ Phase 12 → comparison report + end-to-end integration + notebook → COMPLETE
 
 ---
 
